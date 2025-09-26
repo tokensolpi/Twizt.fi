@@ -1,10 +1,11 @@
+
 import React, { useState, useMemo } from 'react';
 import { useTradeHistory } from '../contexts/TradeHistoryContext';
 
 type PoolAction = 'deposit' | 'withdraw';
 type Asset = 'usdt' | 'usdt_sol';
 
-const LiquidityPool: React.FC = () => {
+const Pools: React.FC = () => {
     const { balances, liquidityPool, addLiquidity, removeLiquidity } = useTradeHistory();
     const [action, setAction] = useState<PoolAction>('deposit');
     const [amount, setAmount] = useState('');
@@ -59,7 +60,7 @@ const LiquidityPool: React.FC = () => {
 
     return (
         <div className="space-y-4">
-            <h3 className="text-white font-semibold text-base">Cross-Chain Liquidity Pool</h3>
+            <h3 className="text-white font-semibold text-base">Cross-Chain Liquidity Pools</h3>
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center text-xs p-2 bg-brand-bg rounded-md">
                 <div>
@@ -128,4 +129,4 @@ const LiquidityPool: React.FC = () => {
     );
 };
 
-export default LiquidityPool;
+export default Pools;

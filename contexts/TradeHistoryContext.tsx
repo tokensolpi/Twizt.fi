@@ -1,7 +1,19 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
-import { Order, OrderStatus, OrderType, Balances, FuturesPosition, PositionSide, LiquidityPoolState } from '../types';
+import { Order, OrderStatus, OrderType, Balances, FuturesPosition, PositionSide, LiquidityPoolState, MarketMakerBot, TradingState, LendingMarketAsset } from '../types';
 import { useMarketData } from './MarketDataContext';
 
+const LENDING_MARKET_CONFIG: Omit<LendingMarketAsset, 'totalSupplied' | 'totalBorrowed' | 'price' | 'name'>[] = [
+    { asset: 'usdt', supplyApy: 4.5, borrowApy: 6.2, collateralFactor: 0.85 },
+    { asset: 'btc', supplyApy: 1.2, borrowApy: 2.5, collateralFactor: 0.75 },
+    { asset: 'eth', supplyApy: 2.1, borrowApy: 3.8, collateralFactor: 0.75 },
+    { asset: 'sol', supplyApy: 3.5, borrowApy: 5.1, collateralFactor: 0.65 },
+];
+const STAKING_APY = 12.5;
+
+interface PaperPnl {
+  value: number;
+  percentage: number;
+}
 interface TradeHistoryContextValue {
   balances: Balances;
   availableBalances: Balances;
@@ -9,13 +21,36 @@ interface TradeHistoryContextValue {
   orderHistory: Order[];
   futuresPositions: FuturesPosition[];
   liquidityPool: LiquidityPoolState;
-  placeOrder: (order: { type: OrderType; price: number; amount: number }) => void;
+  marketMakerBots: MarketMakerBot[];
+  isPaperTrading: boolean;
+  paperPnl: PaperPnl;
+  toggleTradeMode: () => void;
+  resetPaperAccount: () => void;
+  placeOrder: (order: { type: OrderType; price: number; amount: number; pair: string; }) => Order | undefined;
   cancelOrder: (orderId: string) => void;
-  openFuturesPosition: (data: { side: PositionSide; price: number; amount: number; leverage: number; stopLoss?: number; takeProfit?: number; }) => void;
+  openFuturesPosition: (data: { side: PositionSide; price: number; amount: number; leverage: number; pair: string; stopLoss?: number; takeProfit?: number; }) => void;
   closeFuturesPosition: (positionId: string) => void;
   bridgeAssets: (amount: number) => Promise<void>;
   addLiquidity: (amount: number, asset: 'usdt' | 'usdt_sol') => void;
   removeLiquidity: (lpAmount: number, targetAsset: 'usdt' | 'usdt_sol') => void;
+  createMarketMakerBot: (config: { priceRangeLower: number; priceRangeUpper: number; spread: number; initialUsdt: number; orderAmount: number; }) => void;
+  toggleMarketMakerBot: (botId: string) => void;
+  removeMarketMakerBot: (botId: string) => void;
+
+  // New DeFi properties and methods
+  lendingMarket: LendingMarketAsset[];
+  suppliedAssets: Partial<Record<keyof Balances, number>>;
+  borrowedAssets: Partial<Record<keyof Balances, number>>;
+  stakedGdp: number;
+  gdpRewards: number;
+  stakingApy: number;
+  supplyAsset: (asset: keyof Balances, amount: number) => void;
+  withdrawAsset: (asset: keyof Balances, amount: number) => void;
+  borrowAsset: (asset: keyof Balances, amount: number) => void;
+  repayAsset: (asset: keyof Balances, amount: number) => void;
+  stakeGdp: (amount: number) => void;
+  unstakeGdp: (amount: number) => void;
+  claimGdpRewards: () => void;
 }
 
 const TradeHistoryContext = createContext<TradeHistoryContextValue | undefined>(undefined);
@@ -28,267 +63,221 @@ export const useTradeHistory = () => {
   return context;
 };
 
-export const TradeHistoryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { marketData } = useMarketData();
-  const [balances, setBalances] = useState<Balances>({ usdt: 10000, btc: 0.5, usdt_sol: 0, gdp: 0 });
-  const [openOrders, setOpenOrders] = useState<Order[]>([]);
-  const [orderHistory, setOrderHistory] = useState<Order[]>([]);
-  const [futuresPositions, setFuturesPositions] = useState<FuturesPosition[]>([]);
-  const [liquidityPool, setLiquidityPool] = useState<LiquidityPoolState>({ usdt: 500000, usdt_sol: 250000, totalLpTokens: 750000 });
+const initialRealState: TradingState = {
+  balances: { usdt: 10000, btc: 0.5, eth: 10, sol: 50, bnb: 20, doge: 50000, usdt_sol: 0, gdp: 0 },
+  openOrders: [], orderHistory: [], futuresPositions: [], marketMakerBots: [],
+  suppliedAssets: {}, borrowedAssets: {}, stakedGdp: 0, gdpRewards: 0,
+};
 
+const initialPaperState: TradingState = {
+  balances: { usdt: 100000, btc: 10, eth: 200, sol: 1000, bnb: 500, doge: 1000000, usdt_sol: 0, gdp: 0 },
+  openOrders: [], orderHistory: [], futuresPositions: [], marketMakerBots: [],
+  suppliedAssets: { usdt: 5000, btc: 1 }, borrowedAssets: { sol: 10 }, stakedGdp: 0, gdpRewards: 0,
+};
+const PAPER_STATE_KEY = 'twiztedDivergence_paperState';
+const PAPER_INITIAL_VALUE_KEY = 'twiztedDivergence_paperInitialValue';
+
+
+export const TradeHistoryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { marketData, currentPair } = useMarketData();
+  const [isPaperTrading, setIsPaperTrading] = useState(false);
+
+  const [realState, setRealState] = useState<TradingState>(initialRealState);
+  const [paperState, setPaperState] = useState<TradingState>(() => {
+    try {
+      const saved = localStorage.getItem(PAPER_STATE_KEY);
+      return saved ? JSON.parse(saved) : initialPaperState;
+    } catch {
+      return initialPaperState;
+    }
+  });
+  
+  const [lendingMarket, setLendingMarket] = useState<LendingMarketAsset[]>([]);
+
+  // Common state not part of paper/real modes
+  const [liquidityPool, setLiquidityPool] = useState<LiquidityPoolState>({ usdt: 500000, usdt_sol: 250000, totalLpTokens: 750000 });
+  
+  useEffect(() => {
+    // This effect populates the lending market with live prices
+    // In a real app, this data would come from oracles for each asset
+    const btcPrice = currentPair === 'BTC/USDT' ? marketData.price : 68000; // approximation
+    const ethPrice = currentPair === 'ETH/USDT' ? marketData.price : 3800;
+    const solPrice = currentPair === 'SOL/USDT' ? marketData.price : 160;
+
+    const assetPrices: Record<string, number> = {
+        usdt: 1,
+        btc: btcPrice,
+        eth: ethPrice,
+        sol: solPrice,
+    };
+
+    const assetNames: Record<string, string> = {
+        usdt: 'Tether',
+        btc: 'Bitcoin',
+        eth: 'Ethereum',
+        sol: 'Solana',
+    };
+
+    setLendingMarket(
+      LENDING_MARKET_CONFIG.map(config => ({
+        ...config,
+        price: assetPrices[config.asset] || 0,
+        name: assetNames[config.asset] || 'Unknown',
+        totalSupplied: 1000000 / (assetPrices[config.asset] || 1), // Simulated total supplied
+        totalBorrowed: 500000 / (assetPrices[config.asset] || 1), // Simulated total borrowed
+      }))
+    );
+  }, [marketData.price, currentPair]);
+
+  // Save paper state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem(PAPER_STATE_KEY, JSON.stringify(paperState));
+  }, [paperState]);
+  
+  const toggleTradeMode = () => {
+    setIsPaperTrading(prev => {
+        const newModeIsPaper = !prev;
+        if(newModeIsPaper && !localStorage.getItem(PAPER_INITIAL_VALUE_KEY)) {
+             const initialValue = initialPaperState.balances.usdt + initialPaperState.balances.btc * marketData.price;
+             localStorage.setItem(PAPER_INITIAL_VALUE_KEY, JSON.stringify(initialValue));
+        }
+        return newModeIsPaper;
+    });
+  };
+
+  const resetPaperAccount = () => {
+    if (window.confirm("Are you sure you want to reset your paper trading account? All progress will be lost.")) {
+        localStorage.removeItem(PAPER_STATE_KEY);
+        localStorage.removeItem(PAPER_INITIAL_VALUE_KEY);
+        setPaperState(initialPaperState);
+        const initialValue = initialPaperState.balances.usdt + initialPaperState.balances.btc * marketData.price;
+        localStorage.setItem(PAPER_INITIAL_VALUE_KEY, JSON.stringify(initialValue));
+    }
+  };
+
+  const { balances, openOrders, orderHistory, futuresPositions, marketMakerBots, suppliedAssets, borrowedAssets, stakedGdp, gdpRewards } = isPaperTrading ? paperState : realState;
+  const setState = isPaperTrading ? setPaperState : setRealState;
+  
   // Spot Order Logic
-  const placeOrder = useCallback((orderData: { type: OrderType; price: number; amount: number }) => {
+  const placeOrder = useCallback((orderData: { type: OrderType; price: number; amount: number; pair: string; }, botId?: string): Order => {
     const newOrder: Order = {
       id: crypto.randomUUID(), ...orderData, total: orderData.price * orderData.amount,
       status: OrderStatus.OPEN, createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      ...(botId && { botId }),
     };
-    setOpenOrders(prev => [newOrder, ...prev]);
-  }, []);
+    setState(prev => ({ ...prev, openOrders: [newOrder, ...prev.openOrders]}));
+    return newOrder;
+  }, [setState]);
 
-  const cancelOrder = useCallback((orderId: string) => {
-    setOpenOrders(prevOrders => {
-      const orderToCancel = prevOrders.find(o => o.id === orderId);
-      if (orderToCancel) {
-        setOrderHistory(prevHistory => [{ ...orderToCancel, status: OrderStatus.CANCELLED }, ...prevHistory]);
-      }
-      return prevOrders.filter(o => o.id !== orderId);
+  const cancelOrder = useCallback((orderId: string, silent = false) => {
+    setState(prev => {
+        const orderToCancel = prev.openOrders.find(o => o.id === orderId);
+        const newHistory = (orderToCancel && !silent) 
+            ? [{ ...orderToCancel, status: OrderStatus.CANCELLED }, ...prev.orderHistory] 
+            : prev.orderHistory;
+        return {
+            ...prev,
+            openOrders: prev.openOrders.filter(o => o.id !== orderId),
+            orderHistory: newHistory,
+        }
     });
-  }, []);
+  }, [setState]);
 
   // Futures Position Logic
-  const openFuturesPosition = useCallback((data: { side: PositionSide; price: number; amount: number; leverage: number; stopLoss?: number; takeProfit?: number; }) => {
-    const { side, price, amount, leverage, stopLoss, takeProfit } = data;
+  const openFuturesPosition = useCallback((data: { side: PositionSide; price: number; amount: number; leverage: number; pair: string; stopLoss?: number; takeProfit?: number; }) => {
+    const { side, price, amount, leverage, pair, stopLoss, takeProfit } = data;
     const margin = (price * amount) / leverage;
-
-    const liquidationPrice = side === PositionSide.LONG
-      ? price * (1 - (1 / leverage) * 0.95) // Adding a buffer to avoid immediate liquidation
-      : price * (1 + (1 / leverage) * 0.95);
-
+    const liquidationPrice = side === PositionSide.LONG ? price * (1 - (1 / leverage) * 0.95) : price * (1 + (1 / leverage) * 0.95);
     const newPosition: FuturesPosition = {
-      id: crypto.randomUUID(), side, size: amount, leverage, entryPrice: price, margin,
+      id: crypto.randomUUID(), side, size: amount, leverage, entryPrice: price, margin, pair,
       liquidationPrice, unrealizedPnl: 0, stopLoss, takeProfit,
       createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     };
-    setFuturesPositions(prev => [newPosition, ...prev]);
-  }, []);
+    setState(prev => ({ ...prev, futuresPositions: [newPosition, ...prev.futuresPositions] }));
+  }, [setState]);
   
   const closeFuturesPosition = useCallback((positionId: string) => {
     const positionToClose = futuresPositions.find(p => p.id === positionId);
     if (!positionToClose) return;
 
+    // NOTE: This uses the current market price of the *active* pair. This is a simplification.
+    // A robust system would need a live price feed for every position's pair.
+    const closePrice = positionToClose.pair === currentPair ? marketData.price : positionToClose.entryPrice;
+
     const pnl = positionToClose.side === PositionSide.LONG
-        ? (marketData.price - positionToClose.entryPrice) * positionToClose.size
-        : (positionToClose.entryPrice - marketData.price) * positionToClose.size;
+        ? (closePrice - positionToClose.entryPrice) * positionToClose.size
+        : (positionToClose.entryPrice - closePrice) * positionToClose.size;
 
-    setBalances(prev => ({ ...prev, usdt: prev.usdt + positionToClose.margin + pnl }));
-    
-    setOrderHistory(prev => [{
-        id: positionToClose.id, type: positionToClose.side === PositionSide.LONG ? OrderType.BUY : OrderType.SELL,
-        price: marketData.price, amount: positionToClose.size, total: marketData.price * positionToClose.size,
-        status: OrderStatus.FILLED, createdAt: positionToClose.createdAt,
-        filledAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-    }, ...prev]);
+    setState(prev => ({
+        ...prev,
+        balances: { ...prev.balances, usdt: prev.balances.usdt + positionToClose.margin + pnl },
+        orderHistory: [{
+            id: positionToClose.id, type: positionToClose.side === PositionSide.LONG ? OrderType.BUY : OrderType.SELL,
+            price: closePrice, amount: positionToClose.size, total: closePrice * positionToClose.size,
+            status: OrderStatus.FILLED, createdAt: positionToClose.createdAt, pair: positionToClose.pair,
+            filledAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        }, ...prev.orderHistory],
+        futuresPositions: prev.futuresPositions.filter(p => p.id !== positionId),
+    }));
+}, [marketData.price, futuresPositions, setState, currentPair]);
 
-    setFuturesPositions(prev => prev.filter(p => p.id !== positionId));
-}, [marketData.price, futuresPositions]);
-
- // Wormhole Bridge Simulation
+ // Wormhole Bridge Simulation (operates on real balance only)
  const bridgeAssets = useCallback(async (amount: number) => {
     return new Promise<void>((resolve) => {
       setTimeout(() => {
         const fee = 5; // Simulated bridge fee
-        setBalances(prev => ({
+        setRealState(prev => ({
           ...prev,
-          usdt: prev.usdt - amount,
-          usdt_sol: prev.usdt_sol + (amount - fee)
+          balances: {
+            ...prev.balances,
+            usdt: prev.balances.usdt - amount,
+            usdt_sol: prev.balances.usdt_sol + (amount - fee)
+          }
         }));
         resolve();
-      }, 3000); // 3-second delay to simulate transaction time
+      }, 3000);
     });
   }, []);
   
-  // Liquidity Pool Logic
+  // Liquidity Pool Logic (operates on real balance only)
   const addLiquidity = useCallback((amount: number, asset: 'usdt' | 'usdt_sol') => {
     const totalPoolValue = liquidityPool.usdt + liquidityPool.usdt_sol;
-    // Price of one LP token is the total value divided by the number of tokens
     const lpTokenPrice = totalPoolValue > 0 ? totalPoolValue / liquidityPool.totalLpTokens : 1;
-
     const lpTokensToMint = amount / lpTokenPrice;
-
-    setBalances(prev => ({
-        ...prev,
-        [asset]: prev[asset] - amount,
-        gdp: prev.gdp + lpTokensToMint,
-    }));
-
-    setLiquidityPool(prev => ({
-        ...prev,
-        [asset]: prev[asset] + amount,
-        totalLpTokens: prev.totalLpTokens + lpTokensToMint,
-    }));
-
+    setRealState(prev => ({ ...prev, balances: { ...prev.balances, [asset]: prev.balances[asset] - amount, gdp: prev.balances.gdp + lpTokensToMint }}));
+    setLiquidityPool(prev => ({ ...prev, [asset]: prev[asset] + amount, totalLpTokens: prev.totalLpTokens + lpTokensToMint }));
   }, [liquidityPool]);
 
   const removeLiquidity = useCallback((lpAmount: number, targetAsset: 'usdt' | 'usdt_sol') => {
       const totalPoolValue = liquidityPool.usdt + liquidityPool.usdt_sol;
       const lpTokenPrice = totalPoolValue > 0 ? totalPoolValue / liquidityPool.totalLpTokens : 1;
-      
       const valueToReturn = lpAmount * lpTokenPrice;
       const userShare = lpAmount / liquidityPool.totalLpTokens;
-
       const usdtToReturn = userShare * liquidityPool.usdt;
       const usdtSolToReturn = userShare * liquidityPool.usdt_sol;
-
-      // In a real scenario, you might return proportional assets, but here we simplify
-      // by allowing the user to choose their withdrawal asset, assuming pool has enough liquidity
-      if ( (targetAsset === 'usdt' && liquidityPool.usdt < valueToReturn) ||
-           (targetAsset === 'usdt_sol' && liquidityPool.usdt_sol < valueToReturn) ) {
+      if ( (targetAsset === 'usdt' && liquidityPool.usdt < valueToReturn) || (targetAsset === 'usdt_sol' && liquidityPool.usdt_sol < valueToReturn) ) {
         throw new Error("Not enough liquidity of the target asset in the pool.");
       }
-      
-      setBalances(prev => ({
-          ...prev,
-          gdp: prev.gdp - lpAmount,
-          [targetAsset]: prev[targetAsset] + valueToReturn,
-      }));
-
-      setLiquidityPool(prev => ({
-          usdt: prev.usdt - usdtToReturn,
-          usdt_sol: prev.usdt_sol - usdtSolToReturn,
-          totalLpTokens: prev.totalLpTokens - lpAmount,
-      }));
-
+      setRealState(prev => ({ ...prev, balances: { ...prev.balances, gdp: prev.balances.gdp - lpAmount, [targetAsset]: prev.balances[targetAsset] + valueToReturn } }));
+      setLiquidityPool(prev => ({ usdt: prev.usdt - usdtToReturn, usdt_sol: prev.usdt_sol - usdtSolToReturn, totalLpTokens: prev.totalLpTokens - lpAmount }));
   }, [liquidityPool]);
 
-
-  const availableBalances = useMemo(() => {
-    const lockedForSpot = openOrders.reduce((acc, order) => {
-        if (order.type === OrderType.BUY) { acc.usdt += order.total; } 
-        else { acc.btc += order.amount; }
-        return acc;
-      }, { usdt: 0, btc: 0 });
-    
-    const marginForFutures = futuresPositions.reduce((acc, pos) => acc + pos.margin, 0);
-
-    return {
-      usdt: balances.usdt - lockedForSpot.usdt - marginForFutures,
-      btc: balances.btc - lockedForSpot.btc,
-      usdt_sol: balances.usdt_sol,
-      gdp: balances.gdp,
+  // Market Maker Bot Logic
+  const createMarketMakerBot = useCallback((config: { priceRangeLower: number; priceRangeUpper: number; spread: number; initialUsdt: number; orderAmount: number; }) => {
+    if (balances.usdt < config.initialUsdt) {
+      alert("Insufficient USDT balance to create bot."); return;
+    }
+    const newBot: MarketMakerBot = {
+      id: crypto.randomUUID(), isActive: true, ...config,
+      inventory: { usdt: config.initialUsdt, btc: 0 }, orderIds: [],
     };
-  }, [balances, openOrders, futuresPositions]);
+    setState(prev => ({
+        ...prev,
+        marketMakerBots: [...prev.marketMakerBots, newBot],
+        balances: {...prev.balances, usdt: prev.balances.usdt - config.initialUsdt}
+    }));
+  }, [balances.usdt, setState]);
 
-  // Effect for processing spot orders
-  useEffect(() => {
-    const currentPrice = marketData.price;
-    if (currentPrice === 0 || openOrders.length === 0) return;
-    const ordersToFill = openOrders.filter(order => 
-      (order.type === OrderType.BUY && currentPrice <= order.price) ||
-      (order.type === OrderType.SELL && currentPrice >= order.price)
-    );
-
-    if (ordersToFill.length > 0) {
-      setOpenOrders(prev => prev.filter(o => !ordersToFill.some(f => f.id === o.id)));
-      const filledOrders = ordersToFill.map(o => ({
-        ...o, status: OrderStatus.FILLED,
-        filledAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      }));
-      setOrderHistory(prev => [...filledOrders, ...prev]);
-      setBalances(prevBalances => filledOrders.reduce((acc, order) => {
-          if (order.type === OrderType.BUY) {
-            return { ...acc, usdt: acc.usdt - order.total, btc: acc.btc + order.amount };
-          } else {
-            return { ...acc, usdt: acc.usdt + order.total, btc: acc.btc - order.amount };
-          }
-        }, prevBalances)
-      );
-    }
-  }, [marketData.price, openOrders]);
-
-  // Effect for updating futures PnL and handling liquidations/SL/TP
-  useEffect(() => {
-    if (futuresPositions.length === 0 || marketData.price === 0) return;
-
-    const remainingPositions: FuturesPosition[] = [];
-    const closedPositions: { position: FuturesPosition, closePrice: number, status: OrderStatus }[] = [];
-
-    futuresPositions.forEach(pos => {
-      let isClosed = false;
-      let closePrice = 0;
-      let status: OrderStatus = OrderStatus.FILLED;
-
-      // 1. Check for Liquidation
-      const isLiquidated = pos.side === PositionSide.LONG
-        ? marketData.price <= pos.liquidationPrice
-        : marketData.price >= pos.liquidationPrice;
-      if (isLiquidated) {
-        isClosed = true;
-        closePrice = pos.liquidationPrice;
-        status = OrderStatus.LIQUIDATED;
-      }
-
-      // 2. Check for Stop Loss
-      if (!isClosed && pos.stopLoss) {
-        const slTriggered = pos.side === PositionSide.LONG ? marketData.price <= pos.stopLoss : marketData.price >= pos.stopLoss;
-        if (slTriggered) {
-          isClosed = true;
-          closePrice = pos.stopLoss;
-          status = OrderStatus.FILLED;
-        }
-      }
-
-      // 3. Check for Take Profit
-      if (!isClosed && pos.takeProfit) {
-        const tpTriggered = pos.side === PositionSide.LONG ? marketData.price >= pos.takeProfit : marketData.price <= pos.takeProfit;
-        if (tpTriggered) {
-          isClosed = true;
-          closePrice = pos.takeProfit;
-          status = OrderStatus.FILLED;
-        }
-      }
-
-      if (isClosed) {
-        closedPositions.push({ position: pos, closePrice, status });
-      } else {
-        const unrealizedPnl = pos.side === PositionSide.LONG
-          ? (marketData.price - pos.entryPrice) * pos.size
-          : (pos.entryPrice - marketData.price) * pos.size;
-        remainingPositions.push({ ...pos, unrealizedPnl });
-      }
-    });
-
-    if (closedPositions.length > 0) {
-      setBalances(prevBalances => 
-        closedPositions.reduce((acc, { position, closePrice, status }) => {
-          if (status === OrderStatus.LIQUIDATED) {
-            return acc; // Margin is lost
-          }
-          const pnl = position.side === PositionSide.LONG
-            ? (closePrice - position.entryPrice) * position.size
-            : (position.entryPrice - closePrice) * position.size;
-          return { ...acc, usdt: acc.usdt + position.margin + pnl };
-        }, prevBalances)
-      );
-
-      const newHistoryItems = closedPositions.map(({ position, closePrice, status }) => ({
-        id: position.id, type: position.side === PositionSide.LONG ? OrderType.BUY : OrderType.SELL,
-        price: closePrice, amount: position.size,
-        total: status === OrderStatus.LIQUIDATED ? position.margin : closePrice * position.size,
-        status, createdAt: position.createdAt,
-        filledAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      }));
-      setOrderHistory(prev => [...newHistoryItems, ...prev]);
-    }
-
-    setFuturesPositions(remainingPositions);
-  }, [marketData.price, futuresPositions]);
-
-
-  const value = {
-    balances, availableBalances, openOrders, orderHistory, futuresPositions, liquidityPool,
-    placeOrder, cancelOrder, openFuturesPosition, closeFuturesPosition, bridgeAssets,
-    addLiquidity, removeLiquidity,
-  };
-
-  return <TradeHistoryContext.Provider value={value}>{children}</TradeHistoryContext.Provider>;
-};
+  const toggleMarketMakerBot = useCallback((botId: string) => {
+    setState(prev => ({ ...prev, marketMakerBots: prev.marketMakerBots.map(bot => {
+      if (

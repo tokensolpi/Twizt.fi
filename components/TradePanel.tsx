@@ -1,3 +1,6 @@
+
+
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { OrderType, PositionSide } from '../types';
 import { useMarketData } from '../contexts/MarketDataContext';
@@ -6,8 +9,11 @@ import { useTradeHistory } from '../contexts/TradeHistoryContext';
 type TradeMode = 'spot' | 'futures';
 
 const TradePanel: React.FC = () => {
-  const { marketData: { price: marketPrice } } = useMarketData();
+  const { marketData: { price: marketPrice }, currentPair } = useMarketData();
   const { availableBalances, placeOrder, openFuturesPosition } = useTradeHistory();
+
+  const [baseAsset, quoteAsset] = useMemo(() => currentPair.split('/'), [currentPair]);
+  const baseAssetLower = baseAsset.toLowerCase();
 
   const [tradeMode, setTradeMode] = useState<TradeMode>('spot');
   const [activeTab, setActiveTab] = useState<OrderType>(OrderType.BUY);
@@ -20,9 +26,11 @@ const TradePanel: React.FC = () => {
 
   useEffect(() => {
     if (document.activeElement?.id !== 'price') {
-      setPrice(marketPrice.toFixed(2));
+      setPrice(marketPrice.toFixed(marketPrice > 10 ? 2 : 6));
     }
-  }, [marketPrice]);
+    setAmount('');
+    setError(null);
+  }, [marketPrice, currentPair]);
 
   const { total, margin, liquidationPrice } = useMemo(() => {
     const priceNum = parseFloat(price);
@@ -33,15 +41,14 @@ const TradePanel: React.FC = () => {
     const totalVal = priceNum * amountNum;
     const marginVal = totalVal / leverage;
     
-    // Simplified liquidation price calculation
-    const liqPrice = activeTab === OrderType.BUY // Corresponds to LONG
+    const liqPrice = activeTab === OrderType.BUY
       ? priceNum * (1 - (1 / leverage))
       : priceNum * (1 + (1 / leverage));
       
     return {
       total: totalVal.toFixed(2),
       margin: marginVal.toFixed(2),
-      liquidationPrice: liqPrice.toFixed(2)
+      liquidationPrice: liqPrice.toFixed(liqPrice > 10 ? 2 : 6)
     };
   }, [price, amount, leverage, activeTab]);
 
@@ -55,8 +62,9 @@ const TradePanel: React.FC = () => {
             setAmount(amountToSet.toFixed(6));
         }
     } else { // Sell / Short
-        const btcAmount = availableBalances.btc * (percentage / 100);
-        setAmount(btcAmount.toFixed(6));
+        const baseBalance = (availableBalances as any)[baseAssetLower] || 0;
+        const amountToSet = baseBalance * (percentage / 100);
+        setAmount(amountToSet.toFixed(6));
     }
   };
 
@@ -75,35 +83,24 @@ const TradePanel: React.FC = () => {
     }
 
     if (tradeMode === 'spot') {
-      // Spot validation
+      const baseBalance = (availableBalances as any)[baseAssetLower] || 0;
       if (activeTab === OrderType.BUY) {
-          const maxBuyPrice = marketPrice * 1.05;
-          if (priceNum > maxBuyPrice) {
-              setError(`Max buy price is ${maxBuyPrice.toFixed(2)} (5% above market).`); return;
-          }
           if (totalNum > availableBalances.usdt) {
-            setError("Insufficient USDT balance."); return;
+            setError(`Insufficient ${quoteAsset} balance.`); return;
           }
       } else { // SELL
-          const minSellPrice = marketPrice * 0.95;
-          if (priceNum < minSellPrice) {
-              setError(`Min sell price is ${minSellPrice.toFixed(2)} (5% below market).`); return;
-          }
-          if (amountNum > availableBalances.btc) {
-            setError("Insufficient BTC balance."); return;
+          if (amountNum > baseBalance) {
+            setError(`Insufficient ${baseAsset} balance.`); return;
           }
       }
-      placeOrder({ type: activeTab, price: priceNum, amount: amountNum });
+      placeOrder({ type: activeTab, price: priceNum, amount: amountNum, pair: currentPair });
     } else {
-      // Futures validation
       if (marginNum > availableBalances.usdt) {
         setError("Insufficient USDT for margin."); return;
       }
       openFuturesPosition({
         side: activeTab === OrderType.BUY ? PositionSide.LONG : PositionSide.SHORT,
-        price: priceNum,
-        amount: amountNum,
-        leverage,
+        price: priceNum, amount: amountNum, leverage, pair: currentPair,
         stopLoss: stopLoss ? parseFloat(stopLoss) : undefined,
         takeProfit: takeProfit ? parseFloat(takeProfit) : undefined,
       });
@@ -115,6 +112,19 @@ const TradePanel: React.FC = () => {
   };
 
   const isBuy = activeTab === OrderType.BUY;
+  const baseBalance = (availableBalances as any)[baseAssetLower] || 0;
+
+  const InputWithLabel: React.FC<{label: string, asset: string, value: string, onChange: (val: string) => void, placeholder?: string, id: string}> = ({label, asset, value, onChange, placeholder, id}) => (
+    <div>
+      <label className="text-xs text-brand-secondary mb-1 block">{label}</label>
+      <div className="relative">
+        <input id={id} type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+          className="w-full bg-brand-bg border border-brand-border rounded-md pl-3 pr-14 py-2 text-white placeholder-brand-secondary text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary font-mono" />
+        <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-sm font-semibold text-brand-secondary">{asset}</span>
+      </div>
+    </div>
+  );
+
 
   return (
     <div className="bg-brand-surface border border-brand-border rounded-lg p-4 h-full flex flex-col">
@@ -149,20 +159,13 @@ const TradePanel: React.FC = () => {
       </div>
 
       <div className="space-y-4 flex-grow">
-        <div>
-          <label className="text-xs text-brand-secondary mb-1 block">Price (USDT)</label>
-          <input id="price" type="number" value={price} onChange={(e) => {setPrice(e.target.value); setError(null);}}
-            className="w-full bg-brand-bg border border-brand-border rounded-md px-3 py-2 text-white placeholder-brand-secondary text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary font-mono" />
-        </div>
-        <div>
-          <label className="text-xs text-brand-secondary mb-1 block">Amount (BTC)</label>
-          <input id="amount" type="number" value={amount} onChange={(e) => {setAmount(e.target.value); setError(null);}} placeholder="0.00000"
-            className="w-full bg-brand-bg border border-brand-border rounded-md px-3 py-2 text-white placeholder-brand-secondary text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary font-mono" />
-        </div>
+        <InputWithLabel id="price" label={`Price (${quoteAsset})`} asset={quoteAsset} value={price} onChange={(val) => {setPrice(val); setError(null);}} />
+        <InputWithLabel id="amount" label={`Amount (${baseAsset})`} asset={baseAsset} value={amount} onChange={(val) => {setAmount(val); setError(null);}} placeholder="0.00000" />
+        
         <div className="flex justify-between">
             {[25, 50, 75, 100].map(p => (
                 <button key={p} onClick={() => handlePercentage(p)}
-                    className="text-xs bg-brand-bg border border-brand-border rounded-md px-3 py-1 hover:bg-brand-border transition-colors">
+                    className="text-xs bg-brand-bg border border-brand-border rounded-md px-3 py-1 hover:bg-brand-border transition-colors w-[23%]">
                     {p}%
                 </button>
             ))}
@@ -172,18 +175,16 @@ const TradePanel: React.FC = () => {
           <div className="space-y-4">
             <div>
               <label className="text-xs text-brand-secondary mb-1 block">Leverage: <span className="text-white font-mono">{leverage}x</span></label>
-              <input type="range" min="1" max="50" step="1" value={leverage} onChange={(e) => setLeverage(Number(e.target.value))} className="w-full h-2 bg-brand-bg rounded-lg appearance-none cursor-pointer"/>
+              <input type="range" min="1" max="50" step="1" value={leverage} onChange={(e) => setLeverage(Number(e.target.value))} className="w-full h-2 bg-brand-bg rounded-lg appearance-none cursor-pointer accent-brand-primary"/>
             </div>
             <div className="grid grid-cols-2 gap-2">
                 <div>
-                    <label className="text-xs text-brand-secondary mb-1 block">Take Profit (optional)</label>
-                    <input type="number" value={takeProfit} onChange={(e) => setTakeProfit(e.target.value)} placeholder="e.g., 75000"
-                        className="w-full bg-brand-bg border border-brand-border rounded-md px-3 py-2 text-white placeholder-brand-secondary text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary font-mono" />
+                    <label className="text-xs text-brand-secondary mb-1 block">Take Profit</label>
+                    <InputWithLabel id="tp" label="" asset={quoteAsset} value={takeProfit} onChange={setTakeProfit} placeholder={`e.g., ${(marketPrice * 1.05).toFixed(0)}`} />
                 </div>
                 <div>
-                    <label className="text-xs text-brand-secondary mb-1 block">Stop Loss (optional)</label>
-                    <input type="number" value={stopLoss} onChange={(e) => setStopLoss(e.target.value)} placeholder="e.g., 65000"
-                        className="w-full bg-brand-bg border border-brand-border rounded-md px-3 py-2 text-white placeholder-brand-secondary text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary font-mono" />
+                    <label className="text-xs text-brand-secondary mb-1 block">Stop Loss</label>
+                    <InputWithLabel id="sl" label="" asset={quoteAsset} value={stopLoss} onChange={setStopLoss} placeholder={`e.g., ${(marketPrice * 0.95).toFixed(0)}`} />
                 </div>
             </div>
           </div>
@@ -192,16 +193,16 @@ const TradePanel: React.FC = () => {
         <div className="border-t border-brand-border pt-4 space-y-2 text-xs">
           <div className="flex justify-between text-brand-secondary">
             <span>Available</span>
-            <span className="font-mono text-white">{isBuy ? `${availableBalances.usdt.toFixed(2)} USDT` : `${availableBalances.btc.toFixed(6)} BTC`}</span>
+            <span className="font-mono text-white">{isBuy ? `${availableBalances.usdt.toFixed(2)} ${quoteAsset}` : `${baseBalance.toFixed(6)} ${baseAsset}`}</span>
           </div>
            <div className="flex justify-between text-brand-secondary">
             <span>{tradeMode === 'futures' ? 'Margin' : 'Total'}</span>
-            <span className="font-mono text-white">{tradeMode === 'futures' ? margin : total} USDT</span>
+            <span className="font-mono text-white">{tradeMode === 'futures' ? margin : total} {quoteAsset}</span>
           </div>
           {tradeMode === 'futures' && (
             <div className="flex justify-between text-brand-secondary">
               <span>Liq. Price (est.)</span>
-              <span className="font-mono text-white">{liquidationPrice} USDT</span>
+              <span className="font-mono text-white">{liquidationPrice} {quoteAsset}</span>
             </div>
           )}
         </div>
@@ -216,7 +217,7 @@ const TradePanel: React.FC = () => {
           } disabled:opacity-50 disabled:cursor-not-allowed`}
           disabled={!parseFloat(amount) || !parseFloat(price)}
         >
-          {isBuy ? `Buy / Long BTC` : `Sell / Short BTC`}
+          {isBuy ? `Buy / Long ${baseAsset}` : `Sell / Short ${baseAsset}`}
         </button>
       </div>
     </div>

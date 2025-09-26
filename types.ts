@@ -1,3 +1,6 @@
+
+// Fix: Removed self-import of types that was causing declaration conflicts.
+
 export enum OrderType {
   BUY = 'BUY',
   SELL = 'SELL',
@@ -36,6 +39,7 @@ export enum OrderStatus {
 
 export interface Order {
   id: string;
+  pair: string;
   type: OrderType;
   price: number;
   amount: number;
@@ -43,13 +47,18 @@ export interface Order {
   status: OrderStatus;
   createdAt: string;
   filledAt?: string;
+  botId?: string; // Identifier for market maker bot orders
 }
 
 export interface Balances {
   usdt: number;
   btc: number;
+  eth: number;
+  sol: number;
+  bnb: number;
+  doge: number;
   usdt_sol: number;
-  gdp: number; // Gemini DEX LP Token
+  gdp: number; // Twizted Divergence LP Token
 }
 
 export enum PositionSide {
@@ -59,8 +68,9 @@ export enum PositionSide {
 
 export interface FuturesPosition {
   id: string;
+  pair: string;
   side: PositionSide;
-  size: number; // in BTC
+  size: number; // in base asset
   leverage: number;
   entryPrice: number;
   liquidationPrice: number;
@@ -75,4 +85,53 @@ export interface LiquidityPoolState {
   usdt: number;
   usdt_sol: number;
   totalLpTokens: number;
+}
+
+export interface MarketMakerBot {
+  id: string;
+  isActive: boolean;
+  priceRangeLower: number;
+  priceRangeUpper: number;
+  spread: number; // Percentage
+  orderAmount: number; // Amount of BTC per order
+  inventory: {
+    usdt: number;
+    btc: number;
+  };
+  orderIds: string[];
+}
+
+
+// Encapsulates all state related to a single trading account (real or paper)
+export interface TradingState {
+  balances: Balances;
+  openOrders: Order[];
+  orderHistory: Order[];
+  futuresPositions: FuturesPosition[];
+  marketMakerBots: MarketMakerBot[];
+  // New DeFi state
+  suppliedAssets: Partial<Record<keyof Balances, number>>;
+  borrowedAssets: Partial<Record<keyof Balances, number>>;
+  stakedGdp: number;
+  gdpRewards: number;
+}
+
+
+// For AI Price Predictions
+export interface PredictionResult {
+  predictedPrice: number;
+  confidence: string;
+  analysis: string;
+}
+
+// For Lend/Borrow markets
+export interface LendingMarketAsset {
+  asset: keyof Balances;
+  name: string;
+  supplyApy: number;
+  borrowApy: number;
+  collateralFactor: number; // e.g., 0.8 for 80%
+  totalSupplied: number;
+  totalBorrowed: number;
+  price: number; // Live price of the asset
 }

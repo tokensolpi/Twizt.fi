@@ -1,7 +1,10 @@
+
+
+
 import React, { useState } from 'react';
 import { useTradeHistory } from '../contexts/TradeHistoryContext';
 import { Order, OrderStatus, OrderType, FuturesPosition } from '../types';
-import { WalletIcon } from './icons/WalletIcon';
+import { CryptoIcon } from './icons/CryptoIcon';
 
 const PositionsAndOrders: React.FC = () => {
   const { balances, openOrders, orderHistory, futuresPositions, cancelOrder, closeFuturesPosition } = useTradeHistory();
@@ -10,7 +13,7 @@ const PositionsAndOrders: React.FC = () => {
   const TabButton: React.FC<{ tab: 'wallet' | 'positions' | 'open' | 'history'; label: string; count?: number }> = ({ tab, label, count }) => (
     <button
       onClick={() => setActiveTab(tab)}
-      className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+      className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${
         activeTab === tab 
           ? 'bg-brand-primary text-white' 
           : 'bg-brand-bg hover:bg-brand-border text-brand-secondary'
@@ -21,63 +24,66 @@ const PositionsAndOrders: React.FC = () => {
   );
 
   const OrderRow: React.FC<{ order: Order, isHistory?: boolean }> = ({ order, isHistory = false }) => (
-    <div className="grid grid-cols-5 gap-2 text-xs font-mono p-2 border-b border-brand-border last:border-b-0">
-      <span className={order.type === OrderType.BUY ? 'text-green-400' : 'text-red-400'}>{order.type}</span>
-      <span className="text-white">{order.price.toFixed(2)}</span>
-      <span className="text-white">{order.amount.toFixed(4)}</span>
-      <span className={`text-brand-secondary ${order.status === OrderStatus.LIQUIDATED ? 'text-red-500 font-semibold' : ''}`}>
+    <tr className="border-b border-brand-border last:border-b-0 hover:bg-brand-border/20">
+      <td className="p-2 text-white">{order.pair}</td>
+      <td className={`p-2 ${order.type === OrderType.BUY ? 'text-green-400' : 'text-red-400'}`}>{order.type}</td>
+      <td className="p-2 text-white">{order.price.toFixed(2)}</td>
+      <td className="p-2 text-white">{order.amount.toFixed(4)}</td>
+      <td className={`p-2 ${order.status === OrderStatus.LIQUIDATED ? 'text-red-500 font-semibold' : 'text-brand-secondary'}`}>
         {isHistory ? order.status : order.createdAt}
-      </span>
-      <div className="text-right">
+      </td>
+      <td className="p-2 text-right">
         {!isHistory && order.status === OrderStatus.OPEN && (
           <button onClick={() => cancelOrder(order.id)} className="text-brand-red hover:underline text-xs">Cancel</button>
         )}
-      </div>
-    </div>
+      </td>
+    </tr>
   );
 
-  const PositionRow: React.FC<{ position: FuturesPosition }> = ({ position }) => {
+  const PositionCard: React.FC<{ position: FuturesPosition }> = ({ position }) => {
     const isProfit = position.unrealizedPnl >= 0;
+    const pnlPercentage = position.margin > 0 ? (position.unrealizedPnl / position.margin) * 100 : 0;
+
     return (
-      <div className="p-3 border-b border-brand-border last:border-b-0 text-xs font-mono">
-        {/* Top Section: Symbol, PnL */}
+      <div className="bg-brand-bg p-3 border border-brand-border rounded-lg text-xs font-mono">
         <div className="flex justify-between items-start mb-3">
           <div>
-            <span className="text-brand-secondary">BTC/USDT</span>
+            <span className="text-white font-semibold text-sm">{position.pair}</span>
             <p className={`font-semibold text-base ${position.side === 'LONG' ? 'text-green-400' : 'text-red-400'}`}>
               {position.side} {position.leverage}x
             </p>
           </div>
           <div className="text-right">
-             <span className="text-brand-secondary">Unrealized PNL</span>
+             <span className="text-brand-secondary text-[10px]">Unrealized PNL / ROI %</span>
              <p className={`text-base font-semibold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
                 {isProfit ? '+' : ''}{position.unrealizedPnl.toFixed(2)} USDT
+             </p>
+             <p className={`text-xs ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+                ({isProfit ? '+' : ''}{pnlPercentage.toFixed(2)}%)
              </p>
           </div>
         </div>
 
-        {/* Details Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-2 gap-y-2">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-[11px]">
           <div>
-            <span className="text-brand-secondary">Size</span>
-            <p className="text-white">{position.size.toFixed(4)} BTC</p>
+            <span className="text-brand-secondary block">Size</span>
+            <p className="text-white">{position.size.toFixed(4)} {position.pair.split('/')[0]}</p>
           </div>
           <div>
-            <span className="text-brand-secondary">Margin</span>
-            <p className="text-white">{position.margin.toFixed(2)} USDT</p>
-          </div>
-          <div>
-            <span className="text-brand-secondary">Entry Price</span>
+            <span className="text-brand-secondary block">Entry Price</span>
             <p className="text-white">{position.entryPrice.toFixed(2)}</p>
           </div>
           <div>
-            <span className="text-brand-secondary">Liq. Price</span>
+            <span className="text-brand-secondary block">Margin</span>
+            <p className="text-white">{position.margin.toFixed(2)} USDT</p>
+          </div>
+          <div>
+            <span className="text-brand-secondary block">Liq. Price</span>
             <p className="text-yellow-500 font-semibold">{position.liquidationPrice.toFixed(2)}</p>
           </div>
         </div>
 
-        {/* Action Button */}
-        <div className="flex justify-end mt-3">
+        <div className="flex justify-end mt-3 border-t border-brand-border pt-3">
             <button 
               onClick={() => closeFuturesPosition(position.id)}
               className="px-3 py-1 bg-brand-primary/10 text-brand-primary rounded-md hover:bg-brand-primary/20 transition-colors text-xs font-semibold"
@@ -89,64 +95,82 @@ const PositionsAndOrders: React.FC = () => {
     );
   }
   
-  const BalanceRow: React.FC<{ asset: string; chain?: string; balance: number; }> = ({ asset, chain, balance }) => (
-    <div className="flex justify-between items-center text-sm p-3 border-b border-brand-border last:border-b-0">
+  const BalanceRow: React.FC<{ asset: string; name: string; balance: number; }> = ({ asset, name, balance }) => (
+    <div className="flex justify-between items-center text-sm px-3 py-2.5 border-b border-brand-border last:border-b-0 hover:bg-brand-border/20">
+      <div className="flex items-center gap-3">
+        <CryptoIcon asset={asset.toLowerCase()} />
         <div>
-            <p className="font-mono text-white">{asset}</p>
-            {chain && <p className="text-xs text-brand-secondary">{chain}</p>}
+          <p className="font-mono text-white font-medium">{asset}</p>
+          <p className="text-xs text-brand-secondary">{name}</p>
         </div>
-        <p className="font-mono text-white">{balance.toLocaleString('en-US', { minimumFractionDigits: 4 })}</p>
+      </div>
+      <p className="font-mono text-white">{balance.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</p>
     </div>
-    );
+  );
+  
+  const ASSET_NAMES: Record<keyof Omit<typeof balances, 'usdt_sol'>, string> = {
+    usdt: "Tether",
+    btc: "Bitcoin",
+    eth: "Ethereum",
+    sol: "Solana",
+    bnb: "BNB",
+    doge: "Dogecoin",
+    gdp: "LP Token"
+  }
+
 
   return (
     <div>
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 flex-wrap">
         <TabButton tab="wallet" label="Wallet" />
         <TabButton tab="positions" label="Positions" count={futuresPositions.length} />
         <TabButton tab="open" label="Open Orders" count={openOrders.length} />
         <TabButton tab="history" label="Order History" count={orderHistory.length} />
       </div>
       
-      {activeTab === 'wallet' && (
-         <div className="h-48 overflow-y-auto">
-            <BalanceRow asset="USDT" chain="Ethereum (Default)" balance={balances.usdt} />
-            <BalanceRow asset="BTC" chain="Bitcoin" balance={balances.btc} />
-            <BalanceRow asset="USDT" chain="Solana" balance={balances.usdt_sol} />
-            <BalanceRow asset="GDP" chain="Gemini DEX LP" balance={balances.gdp} />
-        </div>
-      )}
+      <div className="h-64 overflow-y-auto">
+        {activeTab === 'wallet' && (
+           <div className="space-y-px">
+              {Object.entries(balances)
+                .sort(([assetA], [assetB]) => assetA.localeCompare(assetB))
+                .map(([asset, balance]) => {
+                if (balance === 0 && asset !== 'usdt') return null; // Hide zero balances except USDT
+                const name = asset === 'usdt_sol' ? 'Tether (Solana)' : ASSET_NAMES[asset as keyof typeof ASSET_NAMES];
+                const symbol = asset === 'usdt_sol' ? 'USDT' : asset.toUpperCase();
+                return <BalanceRow key={asset} asset={symbol} name={name} balance={balance} />;
+              })}
+          </div>
+        )}
 
-      {activeTab === 'positions' && (
-        <div className="h-48 overflow-y-auto">
-            {futuresPositions.length > 0 
-                ? futuresPositions.map(p => <PositionRow key={p.id} position={p} />)
-                : <p className="text-center text-sm text-brand-secondary p-4">No open positions.</p>
-            }
-        </div>
-      )}
+        {activeTab === 'positions' && (
+            futuresPositions.length > 0 
+                ? <div className="space-y-2">{futuresPositions.map(p => <PositionCard key={p.id} position={p} />)}</div>
+                : <p className="text-center text-sm text-brand-secondary pt-10">No open positions.</p>
+        )}
 
-      {(activeTab === 'open' || activeTab === 'history') && (
-        <div className="h-48 overflow-y-auto">
-            <div className="grid grid-cols-5 gap-2 text-xs text-brand-secondary p-2 bg-brand-bg rounded-t-md sticky top-0">
-                <span>Side</span>
-                <span>Price</span>
-                <span>Amount</span>
-                <span>{activeTab === 'open' ? 'Time' : 'Status'}</span>
-                <span className="text-right">Action</span>
-            </div>
-            {activeTab === 'open' && (
-                openOrders.length > 0 
-                ? openOrders.map(o => <OrderRow key={o.id} order={o} />)
-                : <p className="text-center text-sm text-brand-secondary p-4">No open orders.</p>
-            )}
-            {activeTab === 'history' && (
-                orderHistory.length > 0
-                ? orderHistory.map(o => <OrderRow key={o.id} order={o} isHistory={true} />)
-                : <p className="text-center text-sm text-brand-secondary p-4">No order history.</p>
-            )}
-        </div>
-      )}
+        {(activeTab === 'open' || activeTab === 'history') && (
+            (activeTab === 'open' && openOrders.length === 0) || (activeTab === 'history' && orderHistory.length === 0)
+            ? <p className="text-center text-sm text-brand-secondary pt-10">No {activeTab === 'open' ? 'open orders' : 'order history'}.</p>
+            : (
+              <table className="w-full text-xs font-mono text-left">
+                  <thead className="sticky top-0 bg-brand-surface z-10">
+                      <tr className="border-b border-brand-border">
+                          <th className="p-2 font-semibold text-brand-secondary">Pair</th>
+                          <th className="p-2 font-semibold text-brand-secondary">Side</th>
+                          <th className="p-2 font-semibold text-brand-secondary">Price</th>
+                          <th className="p-2 font-semibold text-brand-secondary">Amount</th>
+                          <th className="p-2 font-semibold text-brand-secondary">{activeTab === 'open' ? 'Time' : 'Status'}</th>
+                          <th className="p-2 font-semibold text-brand-secondary text-right">Action</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      {activeTab === 'open' && openOrders.map(o => <OrderRow key={o.id} order={o} />)}
+                      {activeTab === 'history' && orderHistory.map(o => <OrderRow key={o.id} order={o} isHistory={true} />)}
+                  </tbody>
+              </table>
+            )
+        )}
+      </div>
     </div>
   );
 };

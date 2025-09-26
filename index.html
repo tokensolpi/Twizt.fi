@@ -4,12 +4,18 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gemini DeFi DEX</title>
+    <title>Twizted Divergence DEX</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
         theme: {
           extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
             colors: {
               'brand-bg': '#0D1117',
               'brand-surface': '#161B22',
@@ -20,23 +26,48 @@
               'brand-red': '#DA3633',
               'brand-green-light': 'rgba(35, 134, 54, 0.15)',
               'brand-red-light': 'rgba(218, 54, 51, 0.15)',
+            },
+            keyframes: {
+              'fade-in': {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+            },
+            animation: {
+              'fade-in': 'fade-in 0.5s ease-out forwards',
             }
           }
         }
       }
     </script>
+    <style>
+      /* Custom scrollbar for a consistent dark theme */
+      ::-webkit-scrollbar { width: 8px; }
+      ::-webkit-scrollbar-track { background: #161B22; }
+      ::-webkit-scrollbar-thumb { background: #30363D; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: #485058; }
+
+      /* Remove spinners from number inputs */
+      input[type='number']::-webkit-inner-spin-button,
+      input[type='number']::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      input[type='number'] { -moz-appearance: textfield; }
+    </style>
   <script type="importmap">
 {
   "imports": {
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.20.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
     "react/": "https://aistudiocdn.com/react@^19.1.1/",
-    "react": "https://aistudiocdn.com/react@^19.1.1"
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "ethers": "https://aistudiocdn.com/ethers@^6.14.1"
   }
 }
 </script>
 </head>
-  <body class="bg-brand-bg">
+  <body class="bg-brand-bg font-sans">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
