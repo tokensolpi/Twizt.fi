@@ -18,9 +18,7 @@ const TickerTapeWidget: React.FC = () => {
       "symbols": [
         { "proName": "BINANCE:BTCUSDT", "title": "Bitcoin" },
         { "proName": "BINANCE:ETHUSDT", "title": "Ethereum" },
-        { "proName": "BINANCE:SOLUSDT", "title": "Solana" },
-        { "proName": "BINANCE:BNBUSDT", "title": "BNB" },
-        { "proName": "BINANCE:DOGEUSDT", "title": "Dogecoin" }
+        { "proName": "BINANCE:SOLUSDT", "title": "Solana" }
       ],
       "showSymbolLogo": true,
       "colorTheme": "dark",

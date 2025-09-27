@@ -25,21 +25,24 @@ const LendBorrow: React.FC = () => {
     const { totalSuppliedValue, totalBorrowedValue, healthFactor, weightedCollateralValue } = useMemo(() => {
         const suppliedValue = Object.entries(suppliedAssets).reduce((sum, [asset, amount]) => {
             const market = lendingMarket.find(m => m.asset === asset);
-            const numericAmount = amount || 0;
+            // Fix: Explicitly cast `amount` to a number to resolve TS inference issue.
+            const numericAmount = Number(amount) || 0;
             const price = market?.price || 0;
             return sum + (numericAmount * price);
         }, 0);
 
         const borrowedValue = Object.entries(borrowedAssets).reduce((sum, [asset, amount]) => {
             const market = lendingMarket.find(m => m.asset === asset);
-            const numericAmount = amount || 0;
+            // Fix: Explicitly cast `amount` to a number to resolve TS inference issue.
+            const numericAmount = Number(amount) || 0;
             const price = market?.price || 0;
             return sum + (numericAmount * price);
         }, 0);
 
         const weightedCollateral = Object.entries(suppliedAssets).reduce((sum, [asset, amount]) => {
             const market = lendingMarket.find(m => m.asset === asset);
-            const numericAmount = amount || 0;
+            // Fix: Explicitly cast `amount` to a number to resolve TS inference issue.
+            const numericAmount = Number(amount) || 0;
             const price = market?.price || 0;
             const collateralFactor = market?.collateralFactor || 0;
             return sum + (numericAmount * price * collateralFactor);

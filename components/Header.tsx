@@ -1,11 +1,14 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { LogoIcon } from './icons/LogoIcon';
 import { useTradeHistory } from '../contexts/TradeHistoryContext';
 import { useWallet } from '../contexts/WalletContext';
+import { ARBITRUM_BLOCK_EXPLORER, ARBITRUM_CHAIN_ID } from '../constants';
+import GasTracker from './GasTracker';
 
 const Header: React.FC = () => {
-  const { isPaperTrading, toggleTradeMode, paperPnl, realPnl, resetPaperAccount } = useTradeHistory();
-  const { connectWallet, disconnectWallet, isConnected, address, wrongNetwork } = useWallet();
+  const { isPaperTrading, toggleTradeMode, paperPnl, realPnl, resetPaperAccount, balances } = useTradeHistory();
+  const { connectWallet, disconnectWallet, isConnected, address, wrongNetwork, l1Balance } = useWallet();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
@@ -47,17 +50,40 @@ const Header: React.FC = () => {
             <svg className={`w-3 h-3 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
           </button>
           {isDropdownOpen && (
-             <div className="absolute top-full right-0 mt-2 w-40 bg-brand-surface border border-brand-border rounded-md shadow-lg z-20">
-              <button
-                onClick={() => {
-                  disconnectWallet();
-                  setIsDropdownOpen(false);
-                }}
-                className="w-full text-left px-4 py-2 text-sm text-brand-secondary hover:text-white hover:bg-brand-border"
-              >
-                Disconnect
-              </button>
-            </div>
+             <div className="absolute top-full right-0 mt-2 w-56 bg-brand-surface border border-brand-border rounded-md shadow-lg z-20 text-sm">
+                <div className="px-4 py-3 border-b border-brand-border">
+                  <p className="text-xs text-brand-secondary mb-1">Balances</p>
+                  <div className="flex justify-between items-center">
+                    <span className="text-brand-secondary">Arbitrum Sepolia:</span>
+                    <span className="font-mono text-white">
+                      {balances.eth.toFixed(5)} ETH
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-brand-secondary">Ethereum Sepolia:</span>
+                    <span className="font-mono text-white">
+                      {l1Balance ? parseFloat(l1Balance).toFixed(5) : '0.00000'} ETH
+                    </span>
+                  </div>
+                </div>
+                <a
+                  href={`${ARBITRUM_BLOCK_EXPLORER}/address/${address}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full text-left px-4 py-2 text-brand-secondary hover:text-white hover:bg-brand-border/50"
+                >
+                  View on Explorer
+                </a>
+                <button
+                  onClick={() => {
+                    disconnectWallet();
+                    setIsDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-brand-secondary hover:text-white hover:bg-brand-border/50 rounded-b-md"
+                >
+                  Disconnect
+                </button>
+              </div>
           )}
         </div>
       );
@@ -89,6 +115,12 @@ const Header: React.FC = () => {
         </nav>
 
         <div className="flex items-center gap-4">
+          {ARBITRUM_CHAIN_ID === '42161' && (
+            <div className="hidden lg:block">
+              <GasTracker />
+            </div>
+          )}
+
           <div className={`flex items-center gap-3 bg-brand-bg px-3 py-1.5 rounded-md border ${isPaperTrading ? 'border-brand-primary/50' : 'border-brand-green/50'}`}>
             <div>
               <span className="text-xs text-brand-secondary block">{isPaperTrading ? 'Paper Trading' : 'Live Account'} PNL</span>

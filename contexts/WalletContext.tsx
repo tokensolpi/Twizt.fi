@@ -1,6 +1,7 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { ethers } from 'ethers';
-import { ARBITRUM_SEPOLIA_CHAIN_ID, ARBITRUM_SEPOLIA_RPC_URL } from '../constants';
+import { ARBITRUM_CHAIN_ID, ARBITRUM_RPC_URL, ETHEREUM_L1_RPC_URL, ARBITRUM_BLOCK_EXPLORER } from '../constants';
 
 // Fix: Add type definition for window.ethereum to satisfy TypeScript
 declare global {
@@ -14,6 +15,7 @@ interface WalletContextValue {
   signer: ethers.JsonRpcSigner | null;
   address: string | null;
   isConnected: boolean;
+  l1Balance: string | null;
   connectWallet: () => Promise<void>;
   disconnectWallet: () => void;
   wrongNetwork: boolean;
@@ -34,6 +36,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [signer, setSigner] = useState<ethers.JsonRpcSigner | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [wrongNetwork, setWrongNetwork] = useState<boolean>(false);
+  const [l1Balance, setL1Balance] = useState<string | null>(null);
 
   const isConnected = !!address;
 
@@ -56,7 +59,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const browserProvider = new ethers.BrowserProvider(window.ethereum);
         const network = await browserProvider.getNetwork();
 
-        if (network.chainId !== BigInt(ARBITRUM_SEPOLIA_CHAIN_ID)) {
+        if (network.chainId !== BigInt(ARBITRUM_CHAIN_ID)) {
           setWrongNetwork(true);
           setProvider(null);
           setSigner(null);
@@ -82,7 +85,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     try {
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
-        params: [{ chainId: `0x${parseInt(ARBITRUM_SEPOLIA_CHAIN_ID, 10).toString(16)}` }],
+        params: [{ chainId: `0x${parseInt(ARBITRUM_CHAIN_ID, 10).toString(16)}` }],
       });
     } catch (switchError: any) {
       // This error code indicates that the chain has not been added to MetaMask.
@@ -92,15 +95,15 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             method: 'wallet_addEthereumChain',
             params: [
               {
-                chainId: `0x${parseInt(ARBITRUM_SEPOLIA_CHAIN_ID, 10).toString(16)}`,
+                chainId: `0x${parseInt(ARBITRUM_CHAIN_ID, 10).toString(16)}`,
                 chainName: 'Arbitrum Sepolia',
-                rpcUrls: [ARBITRUM_SEPOLIA_RPC_URL],
+                rpcUrls: [ARBITRUM_RPC_URL],
                 nativeCurrency: {
-                  name: 'Sepolia Ether',
+                  name: 'Ether',
                   symbol: 'ETH',
                   decimals: 18,
                 },
-                blockExplorerUrls: ['https://sepolia.arbiscan.io/'],
+                blockExplorerUrls: [ARBITRUM_BLOCK_EXPLORER],
               },
             ],
           });
@@ -123,7 +126,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const browserProvider = new ethers.BrowserProvider(window.ethereum);
       const network = await browserProvider.getNetwork();
 
-      if (network.chainId !== BigInt(ARBITRUM_SEPOLIA_CHAIN_ID)) {
+      if (network.chainId !== BigInt(ARBITRUM_CHAIN_ID)) {
         await switchToArbitrumSepolia();
       }
       
@@ -141,6 +144,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setSigner(null);
     setAddress(null);
     setWrongNetwork(false);
+    setL1Balance(null);
   };
 
   useEffect(() => {
@@ -159,8 +163,28 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, []);
 
+  // Effect to fetch L1 balance whenever the address changes.
+  useEffect(() => {
+    const fetchL1Balance = async () => {
+      if (address) {
+        try {
+          const l1Provider = new ethers.JsonRpcProvider(ETHEREUM_L1_RPC_URL);
+          const balance = await l1Provider.getBalance(address);
+          setL1Balance(ethers.formatEther(balance));
+        } catch (error) {
+          console.error("Failed to fetch L1 balance:", error);
+          setL1Balance(null);
+        }
+      } else {
+        setL1Balance(null);
+      }
+    };
+
+    fetchL1Balance();
+  }, [address]);
+
   return (
-    <WalletContext.Provider value={{ provider, signer, address, isConnected, connectWallet, disconnectWallet, wrongNetwork }}>
+    <WalletContext.Provider value={{ provider, signer, address, isConnected, connectWallet, disconnectWallet, wrongNetwork, l1Balance }}>
       {children}
     </WalletContext.Provider>
   );

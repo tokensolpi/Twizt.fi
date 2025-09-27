@@ -1,10 +1,9 @@
-import { ethers } from 'ethers';
-import { CHAINLINK_CONTRACTS } from '../constants';
 
-// A public, read-only RPC URL for Ethereum Mainnet.
-// Switched to LlamaRPC public endpoint for better stability with contract calls.
-const RPC_URL = 'https://eth.llamarpc.com';
-const provider = new ethers.JsonRpcProvider(RPC_URL);
+import { ethers } from 'ethers';
+import { CHAINLINK_CONTRACTS, ETHEREUM_L1_RPC_URL } from '../constants';
+
+// Use the configured L1 RPC URL for either mainnet or testnet
+const provider = new ethers.JsonRpcProvider(ETHEREUM_L1_RPC_URL);
 
 // The standard ABI for Chainlink's AggregatorV3Interface
 const aggregatorV3InterfaceABI = [

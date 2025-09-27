@@ -135,3 +135,15 @@ export interface LendingMarketAsset {
   totalBorrowed: number;
   price: number; // Live price of the asset
 }
+
+// For Infura Gas API
+export interface GasFeeSuggestion {
+  suggestedMaxPriorityFeePerGas: string;
+  suggestedMaxFeePerGas: string;
+}
+
+export interface GasPrices {
+  low: GasFeeSuggestion;
+  medium: GasFeeSuggestion;
+  high: GasFeeSuggestion;
+}

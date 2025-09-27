@@ -1,10 +1,11 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback, useRef } from 'react';
 import { ethers } from 'ethers';
 import { Order, OrderStatus, OrderType, Balances, FuturesPosition, PositionSide, LiquidityPoolState, MarketMakerBot, TradingState, LendingMarketAsset } from '../types';
 import { useMarketData } from './MarketDataContext';
 import { getOraclePrices } from '../services/oracleService';
 import { useWallet } from './WalletContext';
-import { TOKEN_CONTRACTS_ARBITRUM_SEPOLIA, MINIMAL_ERC20_ABI } from '../constants';
+import { TOKEN_CONTRACTS_ARBITRUM, MINIMAL_ERC20_ABI } from '../constants';
 
 const LENDING_MARKET_CONFIG: Omit<LendingMarketAsset, 'totalSupplied' | 'totalBorrowed' | 'price' | 'name'>[] = [
     { asset: 'usdt', supplyApy: 4.5, borrowApy: 6.2, collateralFactor: 0.85 },
@@ -131,7 +132,7 @@ export const TradeHistoryProvider: React.FC<{ children: ReactNode }> = ({ childr
               eth: parseFloat(ethers.formatEther(ethBalance)),
           };
 
-          for (const [asset, contractInfo] of Object.entries(TOKEN_CONTRACTS_ARBITRUM_SEPOLIA)) {
+          for (const [asset, contractInfo] of Object.entries(TOKEN_CONTRACTS_ARBITRUM)) {
             const contract = new ethers.Contract(contractInfo.address, MINIMAL_ERC20_ABI, provider);
             const balance = await contract.balanceOf(address);
             fetchedBalances[asset as keyof Balances] = parseFloat(ethers.formatUnits(balance, contractInfo.decimals));
@@ -161,12 +162,14 @@ export const TradeHistoryProvider: React.FC<{ children: ReactNode }> = ({ childr
   // Effect to set initial portfolio value for PnL calculation for REAL account
   useEffect(() => {
     if (!isPaperTrading && isConnected && initialRealValueRef.current === null && Object.keys(assetPrices).length > 2) {
-        const totalBalanceValue = Object.values(realState.balances).reduce((a,b) => a+b, 0);
+        // FIX: Explicitly cast balance value to number to prevent type errors.
+        const totalBalanceValue = Object.values(realState.balances).reduce((a, b) => a + (Number(b) || 0), 0);
         if (totalBalanceValue > 0) { // Check if balances are actually populated
             const initialValue = Object.entries(realState.balances).reduce((total, [asset, amount]) => {
                 const priceKey = asset.toUpperCase().split('_')[0];
                 const price = assetPrices[priceKey] || (asset.includes('usdt') ? 1 : 0);
-                return total + (amount * price);
+                // FIX: Explicitly cast `amount` to `number` to resolve TS inference issue.
+                return total + (Number(amount) * price);
             }, 0);
             initialRealValueRef.current = initialValue;
         }
@@ -221,7 +224,7 @@ export const TradeHistoryProvider: React.FC<{ children: ReactNode }> = ({ childr
   const setState = isPaperTrading ? setPaperState : setRealState;
   
   // Spot Order Logic
-  const placeOrder = useCallback((orderData: { type: OrderType; price: number; amount: number; pair: string; }, botId?: string): Order => {
+  const placeOrder = useCallback((orderData: { type: OrderType; price: number; amount: number; pair: string; }, botId?: string): Order | undefined => {
     const newOrder: Order = {
       id: crypto.randomUUID(), ...orderData, total: orderData.price * orderData.amount,
       status: OrderStatus.OPEN, createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -369,20 +372,22 @@ export const TradeHistoryProvider: React.FC<{ children: ReactNode }> = ({ childr
     if (marketData.price === 0) return;
 
     // 1. Process open spot orders (realistic matching)
-    const ordersToProcess = [...openOrders];
-    ordersToProcess.forEach(order => {
-      if (order.status !== OrderStatus.OPEN || order.pair !== currentPair) return;
+    setState(prevState => {
+      let newState = { ...prevState };
+      const ordersToProcess = [...newState.openOrders];
 
-      const shouldFill = (order.type === OrderType.BUY && marketData.price <= order.price) ||
-                         (order.type === OrderType.SELL && marketData.price >= order.price);
+      ordersToProcess.forEach(order => {
+        if (order.status !== OrderStatus.OPEN || order.pair !== currentPair) return;
 
-      if (shouldFill) {
-        setState(prev => {
+        const shouldFill = (order.type === OrderType.BUY && marketData.price <= order.price) ||
+                           (order.type === OrderType.SELL && marketData.price >= order.price);
+
+        if (shouldFill) {
           const [baseAsset, quoteAsset] = order.pair.split('/');
           const baseAssetLower = baseAsset.toLowerCase() as keyof Balances;
           const quoteAssetLower = quoteAsset.toLowerCase() as keyof Balances;
 
-          const newBalances = { ...prev.balances };
+          const newBalances = { ...newState.balances };
           if (order.type === OrderType.BUY) {
             newBalances[quoteAssetLower] -= order.total;
             newBalances[baseAssetLower] = (newBalances[baseAssetLower] || 0) + order.amount;
@@ -393,250 +398,255 @@ export const TradeHistoryProvider: React.FC<{ children: ReactNode }> = ({ childr
 
           const filledOrder = { ...order, status: OrderStatus.FILLED, filledAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) };
           
-          let updatedBots = prev.marketMakerBots;
+          let updatedBots = newState.marketMakerBots;
           if (order.botId) {
-              updatedBots = prev.marketMakerBots.map(bot => {
-                  if (bot.id === order.botId) {
-                      const newInventory = { ...bot.inventory };
-                      if (order.type === OrderType.BUY) {
-                          newInventory.usdt -= order.total;
-                          newInventory.btc += order.amount;
-                      } else { // SELL
-                          newInventory.usdt += order.total;
-                          newInventory.btc -= order.amount;
-                      }
-                      return { ...bot, inventory: newInventory };
-                  }
-                  return bot;
-              });
+            updatedBots = newState.marketMakerBots.map(bot => {
+              if (bot.id === order.botId) {
+                const newInventory = { ...bot.inventory };
+                if (order.type === OrderType.BUY) {
+                  newInventory.usdt -= order.total;
+                  newInventory.btc += order.amount;
+                } else {
+                  newInventory.usdt += order.total;
+                  newInventory.btc -= order.amount;
+                }
+                return { ...bot, inventory: newInventory, orderIds: bot.orderIds.filter(id => id !== order.id) };
+              }
+              return bot;
+            });
           }
 
-          return {
-            ...prev,
+          newState = {
+            ...newState,
             balances: newBalances,
-            openOrders: prev.openOrders.filter(o => o.id !== order.id),
-            orderHistory: [filledOrder, ...prev.orderHistory],
+            openOrders: newState.openOrders.filter(o => o.id !== order.id),
+            orderHistory: [filledOrder, ...newState.orderHistory],
             marketMakerBots: updatedBots,
           };
-        });
-      }
+        }
+      });
+      return newState;
     });
 
-    // 2. Update futures positions (PNL, Liquidations, SL/TP)
+    // 2. Update futures PNL and check for liquidations
     setState(prev => {
-      let stateChanged = false;
-      const newPositions = [...prev.futuresPositions];
-      const newHistory = [...prev.orderHistory];
-      const newBalances = { ...prev.balances };
-
-      const updatedPositions = newPositions.map(position => {
-        if (position.pair !== currentPair) {
-             const baseAsset = position.pair.split('/')[0];
-             const livePrice = assetPrices[baseAsset];
-             if(!livePrice) return position; // Can't update if price is not available
-
-             const unrealizedPnl = position.side === 'LONG'
-                ? (livePrice - position.entryPrice) * position.size
-                : (position.entryPrice - livePrice) * position.size;
-             return { ...position, unrealizedPnl };
+      const positionsToLiquidate: string[] = [];
+      const updatedPositions = prev.futuresPositions.map(p => {
+        const pnl = p.side === PositionSide.LONG
+          ? (marketData.price - p.entryPrice) * p.size
+          : (p.entryPrice - marketData.price) * p.size;
+        
+        if ((p.side === PositionSide.LONG && marketData.price <= p.liquidationPrice) || (p.side === PositionSide.SHORT && marketData.price >= p.liquidationPrice)) {
+          positionsToLiquidate.push(p.id);
         }
 
-        let unrealizedPnl = position.side === 'LONG'
-          ? (marketData.price - position.entryPrice) * position.size
-          : (position.entryPrice - marketData.price) * position.size;
+        return { ...p, unrealizedPnl: pnl };
+      });
 
-        const isLiquidated = (position.side === 'LONG' && marketData.price <= position.liquidationPrice) ||
-                             (position.side === 'SHORT' && marketData.price >= position.liquidationPrice);
+      if (positionsToLiquidate.length > 0) {
+        const liquidatedHistory = updatedPositions
+          .filter(p => positionsToLiquidate.includes(p.id))
+          .map(p => ({
+            ...p,
+            id: crypto.randomUUID(), type: p.side === PositionSide.LONG ? OrderType.SELL : OrderType.BUY,
+            price: p.liquidationPrice, amount: p.size, total: p.liquidationPrice * p.size, status: OrderStatus.LIQUIDATED,
+            filledAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+          }));
 
-        const isStopped = (position.stopLoss && position.side === 'LONG' && marketData.price <= position.stopLoss) ||
-                          (position.stopLoss && position.side === 'SHORT' && marketData.price >= position.stopLoss);
-                          
-        const isTakenProfit = (position.takeProfit && position.side === 'LONG' && marketData.price >= position.takeProfit) ||
-                              (position.takeProfit && position.side === 'SHORT' && marketData.price <= position.takeProfit);
-
-        if (isLiquidated || isStopped || isTakenProfit) {
-          stateChanged = true;
-          const closePrice = isLiquidated ? position.liquidationPrice : (isStopped ? position.stopLoss! : position.takeProfit!);
-          const finalPnl = position.side === 'LONG'
-            ? (closePrice - position.entryPrice) * position.size
-            : (position.entryPrice - closePrice) * position.size;
-          
-          newBalances.usdt += position.margin + finalPnl;
-          
-          newHistory.unshift({
-              id: position.id, type: position.side === 'LONG' ? OrderType.BUY : OrderType.SELL,
-              price: closePrice, amount: position.size, total: closePrice * position.size,
-              status: isLiquidated ? OrderStatus.LIQUIDATED : OrderStatus.FILLED, createdAt: position.createdAt, pair: position.pair,
-              filledAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-          });
-          return null;
-        }
-
-        return { ...position, unrealizedPnl };
-      }).filter(p => p !== null) as FuturesPosition[];
-
-      if (stateChanged) {
-        return { ...prev, futuresPositions: updatedPositions, orderHistory: newHistory, balances: newBalances };
+        return {
+          ...prev,
+          futuresPositions: updatedPositions.filter(p => !positionsToLiquidate.includes(p.id)),
+          orderHistory: [...liquidatedHistory, ...prev.orderHistory],
+        };
       }
-      // Just update PNL if no positions were closed
       return { ...prev, futuresPositions: updatedPositions };
     });
-    
-    // 3. Run market maker bots
-    marketMakerBots.forEach(bot => {
-        if (!bot.isActive || currentPair !== 'BTC/USDT') return; // Simplified: bot only works on BTC/USDT
-        
-        // Cancel old orders first
+
+    // 3. Run market maker bot logic (BTC/USDT only for this simulation)
+    if (currentPair === 'BTC/USDT') {
+      marketMakerBots.forEach(bot => {
+        if (!bot.isActive) return;
+
+        // Cancel existing orders to replace them
         bot.orderIds.forEach(id => cancelOrder(id, true));
+        
+        const midPrice = marketData.price;
+        const spreadValue = midPrice * (bot.spread / 100) / 2;
+        const buyPrice = parseFloat((midPrice - spreadValue).toFixed(2));
+        const sellPrice = parseFloat((midPrice + spreadValue).toFixed(2));
+        
+        const newOrderIds: string[] = [];
 
-        if (marketData.price > bot.priceRangeLower && marketData.price < bot.priceRangeUpper) {
-            const buyPrice = marketData.price * (1 - bot.spread / 200);
-            const sellPrice = marketData.price * (1 + bot.spread / 200);
-            const newOrderIds: string[] = [];
-
-            // Place buy order if bot has USDT
-            if (bot.inventory.usdt > buyPrice * bot.orderAmount) {
-                const buyOrder = placeOrder({ type: OrderType.BUY, price: buyPrice, amount: bot.orderAmount, pair: 'BTC/USDT' }, bot.id);
-                if(buyOrder) newOrderIds.push(buyOrder.id);
-            }
-            // Place sell order if bot has BTC
-            if (bot.inventory.btc > bot.orderAmount) {
-                const sellOrder = placeOrder({ type: OrderType.SELL, price: sellPrice, amount: bot.orderAmount, pair: 'BTC/USDT' }, bot.id);
-                if(sellOrder) newOrderIds.push(sellOrder.id);
-            }
-            
-            setState(prev => ({ ...prev, marketMakerBots: prev.marketMakerBots.map(b => b.id === bot.id ? {...b, orderIds: newOrderIds} : b)}));
+        if (buyPrice >= bot.priceRangeLower && bot.inventory.usdt >= buyPrice * bot.orderAmount) {
+          const order = placeOrder({ type: OrderType.BUY, price: buyPrice, amount: bot.orderAmount, pair: currentPair }, bot.id);
+          if (order) newOrderIds.push(order.id);
         }
+
+        if (sellPrice <= bot.priceRangeUpper && bot.inventory.btc >= bot.orderAmount) {
+          const order = placeOrder({ type: OrderType.SELL, price: sellPrice, amount: bot.orderAmount, pair: currentPair }, bot.id);
+          if (order) newOrderIds.push(order.id);
+        }
+        
+        setState(prev => ({
+          ...prev,
+          marketMakerBots: prev.marketMakerBots.map(b => b.id === bot.id ? { ...b, orderIds: newOrderIds } : b)
+        }));
+      });
+    }
+
+    // 4. Accrue staking rewards
+    setState(prev => {
+      if (prev.stakedGdp > 0) {
+        const rewardsPerTick = (prev.stakedGdp * (STAKING_APY / 100) / 31536000) * 8; // APY / seconds_in_year * tick_duration
+        return { ...prev, gdpRewards: prev.gdpRewards + rewardsPerTick };
+      }
+      return prev;
     });
 
-  }, [marketData.price, currentPair]); // Re-run simulation on price/pair change
+  }, [marketData.price, isPaperTrading, currentPair]); // Re-run simulation on price/mode change
 
   const availableBalances = useMemo(() => {
-    const available = { ...balances };
-    openOrders.forEach(order => {
-        const [baseAsset, quoteAsset] = order.pair.split('/');
-        const baseAssetLower = baseAsset.toLowerCase() as keyof Balances;
-        const quoteAssetLower = quoteAsset.toLowerCase() as keyof Balances;
+    const lockedInOrders = openOrders.reduce((acc, order) => {
         if (order.type === OrderType.BUY) {
-            available[quoteAssetLower] -= order.total;
+            acc.usdt += order.total;
         } else {
-            available[baseAssetLower] -= order.amount;
+            const baseAsset = order.pair.split('/')[0].toLowerCase() as keyof Balances;
+            acc[baseAsset] = (acc[baseAsset] || 0) + order.amount;
         }
-    });
-     futuresPositions.forEach(position => {
-        available.usdt -= position.margin;
-    });
-    return available;
-  }, [balances, openOrders, futuresPositions]);
+        return acc;
+    }, { usdt: 0 } as Partial<Balances>);
 
-  const paperPnl = useMemo<PaperPnl>(() => {
-    if (!isPaperTrading) return { value: 0, percentage: 0 };
-    
-    const initialValueStr = localStorage.getItem(PAPER_INITIAL_VALUE_KEY);
-    const initialValue = initialValueStr ? JSON.parse(initialValueStr) : initialPaperState.balances.usdt;
-    
-    const currentPortfolioValue = Object.entries(paperState.balances).reduce((total, [asset, amount]) => {
-        const priceKey = asset.toUpperCase().split('_')[0]; 
-        const price = assetPrices[priceKey] || (asset.includes('usdt') ? 1 : 0);
+    const lockedInFutures = futuresPositions.reduce((acc, pos) => {
+        acc.usdt += pos.margin;
+        return acc;
+    }, { usdt: 0 });
 
-        if (asset.toLowerCase() === 'gdp') {
-            const totalPoolValue = liquidityPool.usdt + liquidityPool.usdt_sol;
-            const lpTokenPrice = totalPoolValue > 0 ? totalPoolValue / liquidityPool.totalLpTokens : 0;
-            return total + (amount * lpTokenPrice);
+    const lockedInBots = marketMakerBots.reduce((acc, bot) => {
+        acc.usdt += bot.inventory.usdt;
+        acc.btc += bot.inventory.btc;
+        return acc;
+    }, { usdt: 0, btc: 0 });
+
+    const supplied = Object.entries(suppliedAssets).reduce((acc, [asset, amount]) => {
+        acc[asset as keyof Balances] = (acc[asset as keyof Balances] || 0) + Number(amount);
+        return acc;
+    }, {} as Partial<Balances>);
+    
+    const borrowed = Object.entries(borrowedAssets).reduce((acc, [asset, amount]) => {
+        acc[asset as keyof Balances] = (acc[asset as keyof Balances] || 0) - Number(amount);
+        return acc;
+    }, {} as Partial<Balances>);
+
+    const newBalances = { ...balances };
+    for (const key in newBalances) {
+        const asset = key as keyof Balances;
+        newBalances[asset] -= (lockedInOrders[asset] || 0);
+        newBalances[asset] -= (lockedInFutures[asset] || 0);
+        newBalances[asset] -= (lockedInBots[asset] || 0);
+        newBalances[asset] -= (supplied[asset] || 0);
+        newBalances[asset] += (borrowed[asset] || 0);
+        if (asset === 'gdp') {
+            newBalances.gdp -= stakedGdp;
         }
-        return total + (amount * price);
-    }, 0);
+    }
+    return newBalances;
+  }, [balances, openOrders, futuresPositions, marketMakerBots, suppliedAssets, borrowedAssets, stakedGdp]);
 
-    const pnlValue = currentPortfolioValue - initialValue;
-    const pnlPercentage = initialValue > 0 ? (pnlValue / initialValue) * 100 : 0;
-    
-    return { value: pnlValue, percentage: pnlPercentage };
-  }, [isPaperTrading, paperState.balances, assetPrices, liquidityPool]);
-
-  const realPnl = useMemo<PaperPnl>(() => {
-    if (isPaperTrading || initialRealValueRef.current === null) return { value: 0, percentage: 0 };
-    
-    const initialValue = initialRealValueRef.current;
-    
-    const currentPortfolioValue = Object.entries(realState.balances).reduce((total, [asset, amount]) => {
-        const priceKey = asset.toUpperCase().split('_')[0]; 
-        const price = assetPrices[priceKey] || (asset.includes('usdt') ? 1 : 0);
-
-        if (asset.toLowerCase() === 'gdp') {
-            const totalPoolValue = liquidityPool.usdt + liquidityPool.usdt_sol;
-            const lpTokenPrice = totalPoolValue > 0 ? totalPoolValue / liquidityPool.totalLpTokens : 0;
-            return total + (amount * lpTokenPrice);
-        }
-        return total + (amount * price);
-    }, 0);
-
-    const pnlValue = currentPortfolioValue - initialValue;
-    const pnlPercentage = initialValue > 0 ? (pnlValue / initialValue) * 100 : 0;
-    
-    return { value: pnlValue, percentage: pnlPercentage };
-  }, [isPaperTrading, realState.balances, assetPrices, liquidityPool]);
-
-
-  // DeFi State Logic (Supplying, Borrowing, Staking)
-  const modifyDeFiBalance = useCallback((
-    asset: keyof Balances, amount: number,
-    source: 'balances' | 'suppliedAssets' | 'borrowedAssets' | 'stakedGdp',
-    destination: 'balances' | 'suppliedAssets' | 'borrowedAssets' | 'stakedGdp'
-  ) => {
-    setState(prev => {
-        const newState = { ...prev };
-        const update = (obj: any, key: string, delta: number) => {
-            obj[key] = (obj[key] || 0) + delta;
-        };
-        const sourceMap = { balances: newState.balances, suppliedAssets: newState.suppliedAssets, borrowedAssets: newState.borrowedAssets };
-        const destMap = { balances: newState.balances, suppliedAssets: newState.suppliedAssets, borrowedAssets: newState.borrowedAssets };
-
-        if (source === 'stakedGdp') newState.stakedGdp -= amount; else update(sourceMap[source], asset, -amount);
-        if (destination === 'stakedGdp') newState.stakedGdp += amount; else update(destMap[destination], asset, amount);
-        
-        return newState;
-    });
-  }, [setState]);
-
-  const supplyAsset = (asset: keyof Balances, amount: number) => modifyDeFiBalance(asset, amount, 'balances', 'suppliedAssets');
-  const withdrawAsset = (asset: keyof Balances, amount: number) => modifyDeFiBalance(asset, amount, 'suppliedAssets', 'balances');
-  const borrowAsset = (asset: keyof Balances, amount: number) => modifyDeFiBalance(asset, amount, 'balances', 'borrowedAssets');
-  const repayAsset = (asset: keyof Balances, amount: number) => modifyDeFiBalance(asset, amount, 'borrowedAssets', 'balances');
-  const stakeGdp = (amount: number) => modifyDeFiBalance('gdp', amount, 'balances', 'stakedGdp');
-  const unstakeGdp = (amount: number) => modifyDeFiBalance('gdp', amount, 'stakedGdp', 'balances');
-  const claimGdpRewards = () => {
-    setState(prev => {
-      if (prev.gdpRewards <= 0) return prev;
-      return {
-        ...prev,
-        balances: { ...prev.balances, usdt: prev.balances.usdt + prev.gdpRewards },
-        gdpRewards: 0,
-      };
-    });
+  // DeFi Methods
+  const supplyAsset = (asset: keyof Balances, amount: number) => {
+      if (amount > availableBalances[asset]) return;
+      setState(prev => ({
+          ...prev,
+          suppliedAssets: { ...prev.suppliedAssets, [asset]: (prev.suppliedAssets[asset] || 0) + amount }
+      }));
+  };
+  const withdrawAsset = (asset: keyof Balances, amount: number) => {
+      if (amount > (suppliedAssets[asset] || 0)) return;
+      setState(prev => ({
+          ...prev,
+          suppliedAssets: { ...prev.suppliedAssets, [asset]: (prev.suppliedAssets[asset] || 0) - amount }
+      }));
+  };
+  const borrowAsset = (asset: keyof Balances, amount: number) => {
+      setState(prev => ({
+          ...prev,
+          borrowedAssets: { ...prev.borrowedAssets, [asset]: (prev.borrowedAssets[asset] || 0) + amount }
+      }));
+  };
+  const repayAsset = (asset: keyof Balances, amount: number) => {
+      if (amount > (borrowedAssets[asset] || 0) || amount > availableBalances[asset]) return;
+      setState(prev => ({
+          ...prev,
+          borrowedAssets: { ...prev.borrowedAssets, [asset]: (prev.borrowedAssets[asset] || 0) - amount }
+      }));
   };
 
-  // Effect for generating staking rewards
-  useEffect(() => {
-    if (stakedGdp <= 0) return;
-    const interval = setInterval(() => {
-      const rewardsPerSecond = (stakedGdp * STAKING_APY / 100) / (365 * 24 * 60 * 60);
+  const stakeGdp = (amount: number) => {
+      if (amount > availableBalances.gdp) return;
+      setState(prev => ({...prev, stakedGdp: prev.stakedGdp + amount}));
+  };
+  const unstakeGdp = (amount: number) => {
+      if (amount > stakedGdp) return;
+      setState(prev => ({...prev, stakedGdp: prev.stakedGdp - amount}));
+  };
+  const claimGdpRewards = () => {
       setState(prev => ({
-        ...prev,
-        gdpRewards: prev.gdpRewards + rewardsPerSecond * 5 // Update every 5 seconds
+          ...prev,
+          balances: { ...prev.balances, gdp: prev.balances.gdp + prev.gdpRewards },
+          gdpRewards: 0,
       }));
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [stakedGdp, setState]);
+  };
+
+  const calculatePortfolioValue = (state: TradingState): number => {
+    // Sum of all balances valued in USDT
+    const balanceValue = Object.entries(state.balances).reduce((total, [asset, amount]) => {
+      const price = assetPrices[asset.toUpperCase().split('_')[0]] || (asset.includes('usdt') ? 1 : 0);
+      return total + (Number(amount) * price);
+    }, 0);
+    // Add margin and PNL from futures
+    const futuresValue = state.futuresPositions.reduce((total, pos) => total + pos.margin + pos.unrealizedPnl, 0);
+    // Add value held in bots
+    const botValue = state.marketMakerBots.reduce((total, bot) => total + bot.inventory.usdt + (bot.inventory.btc * (assetPrices['BTC'] || 0)), 0);
+    // Add supplied assets and subtract borrowed assets
+    const lendBorrowValue = Object.entries(state.suppliedAssets).reduce((total, [asset, amount]) => total + (Number(amount) * (assetPrices[asset.toUpperCase()] || 0)), 0)
+                          - Object.entries(state.borrowedAssets).reduce((total, [asset, amount]) => total + (Number(amount) * (assetPrices[asset.toUpperCase()] || 0)), 0);
+    
+    return balanceValue + futuresValue + botValue + lendBorrowValue + (state.stakedGdp * (assetPrices['GDP'] || 1)); // Assume GDP price is 1 for now
+  };
+  
+  const calculatePnl = (currentValue: number, initialValue: number): PaperPnl => {
+      if (initialValue === 0) return { value: 0, percentage: 0 };
+      const value = currentValue - initialValue;
+      const percentage = (value / initialValue) * 100;
+      return { value, percentage };
+  };
+
+  const paperPnl = useMemo(() => {
+    const initialValue = parseFloat(localStorage.getItem(PAPER_INITIAL_VALUE_KEY) || '100000');
+    if (Object.keys(assetPrices).length === 0) return { value: 0, percentage: 0 };
+    const currentValue = calculatePortfolioValue(paperState);
+    return calculatePnl(currentValue, initialValue);
+  }, [paperState, assetPrices]);
+  
+  const realPnl = useMemo(() => {
+    const initialValue = initialRealValueRef.current;
+    if (initialValue === null || Object.keys(assetPrices).length === 0) return { value: 0, percentage: 0 };
+    const currentValue = calculatePortfolioValue(realState);
+    return calculatePnl(currentValue, initialValue);
+  }, [realState, assetPrices]);
+
+
+  const value = {
+    balances, availableBalances, openOrders, orderHistory, futuresPositions, liquidityPool, marketMakerBots,
+    isPaperTrading, paperPnl, realPnl,
+    toggleTradeMode, resetPaperAccount, placeOrder, cancelOrder, openFuturesPosition, closeFuturesPosition,
+    bridgeAssets, addLiquidity, removeLiquidity, createMarketMakerBot, toggleMarketMakerBot, removeMarketMakerBot,
+    lendingMarket, suppliedAssets, borrowedAssets, stakedGdp, gdpRewards, stakingApy: STAKING_APY,
+    supplyAsset, withdrawAsset, borrowAsset, repayAsset, stakeGdp, unstakeGdp, claimGdpRewards
+  };
 
   return (
-    <TradeHistoryContext.Provider value={{
-      balances, availableBalances, openOrders, orderHistory, futuresPositions, marketMakerBots,
-      isPaperTrading, paperPnl, realPnl, toggleTradeMode, resetPaperAccount, placeOrder, cancelOrder,
-      openFuturesPosition, closeFuturesPosition, liquidityPool, bridgeAssets, addLiquidity, removeLiquidity,
-      createMarketMakerBot, toggleMarketMakerBot, removeMarketMakerBot,
-      lendingMarket, suppliedAssets, borrowedAssets, stakedGdp, gdpRewards, stakingApy: STAKING_APY,
-      supplyAsset, withdrawAsset, borrowAsset, repayAsset, stakeGdp, unstakeGdp, claimGdpRewards
-    }}>
+    <TradeHistoryContext.Provider value={value}>
       {children}
     </TradeHistoryContext.Provider>
   );
