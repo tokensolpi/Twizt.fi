@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { OrderType, PositionSide } from '../types';
 import { useMarketData } from '../contexts/MarketDataContext';
@@ -55,18 +53,27 @@ const TradePanel: React.FC = () => {
   const handlePercentage = (percentage: number) => {
     setError(null);
     const priceNum = parseFloat(price);
-    if (activeTab === OrderType.BUY) { // Buy / Long
-        const totalValue = availableBalances.usdt * (percentage / 100);
-        if (!isNaN(priceNum) && priceNum > 0) {
-            const amountToSet = tradeMode === 'futures' ? (totalValue / (priceNum / leverage)) : (totalValue / priceNum);
+    if (isNaN(priceNum) || priceNum <= 0) return;
+
+    if (tradeMode === 'spot') {
+        if (activeTab === OrderType.BUY) {
+            const totalValue = availableBalances.usdt * (percentage / 100);
+            const amountToSet = totalValue / priceNum;
+            setAmount(amountToSet.toFixed(6));
+        } else { // SELL
+            const baseBalance = (availableBalances as any)[baseAssetLower] || 0;
+            const amountToSet = baseBalance * (percentage / 100);
             setAmount(amountToSet.toFixed(6));
         }
-    } else { // Sell / Short
-        const baseBalance = (availableBalances as any)[baseAssetLower] || 0;
-        const amountToSet = baseBalance * (percentage / 100);
+    } else { // Futures
+        // For both long and short, the position size is determined by the margin (USDT) you commit.
+        const marginToUse = availableBalances.usdt * (percentage / 100);
+        const positionValue = marginToUse * leverage;
+        const amountToSet = positionValue / priceNum;
         setAmount(amountToSet.toFixed(6));
     }
   };
+
 
   const handleSubmit = () => {
     setError(null);

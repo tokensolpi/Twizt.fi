@@ -69,7 +69,8 @@ export const getOraclePrice = async (pair: string): Promise<number> => {
     }
 
     try {
-        const priceFeed = new ethers.Contract(address, aggregatorV3InterfaceABI, provider);
+        const checksumAddress = ethers.getAddress(address);
+        const priceFeed = new ethers.Contract(checksumAddress, aggregatorV3InterfaceABI, provider);
         const [roundData, decimals] = await Promise.all([
             priceFeed.latestRoundData(),
             priceFeed.decimals()
@@ -82,4 +83,31 @@ export const getOraclePrice = async (pair: string): Promise<number> => {
         console.error(`Failed to fetch price for ${pair} from oracle at ${address}`, error);
         throw new Error(`Could not retrieve oracle price for ${pair}.`);
     }
+};
+
+/**
+ * Fetches the latest prices for all configured trading pairs from Chainlink oracles.
+ * @returns A promise that resolves to a record mapping asset symbols (e.g., "BTC") to their USD price.
+ */
+export const getOraclePrices = async (): Promise<Record<string, number>> => {
+    const pricePromises = Object.entries(CHAINLINK_CONTRACTS).map(async ([pair]) => {
+        try {
+            const price = await getOraclePrice(pair);
+            const baseAsset = pair.split('/')[0];
+            return { [baseAsset]: price };
+        } catch (error) {
+            console.error(`Could not fetch price for ${pair}, skipping.`, error);
+            return {}; // Return empty object on error to avoid breaking Promise.all
+        }
+    });
+
+    const priceObjects = await Promise.all(pricePromises);
+    
+    // Also add USDT price
+    const allPrices: Record<string, number> = {
+        ...priceObjects.reduce((acc, curr) => ({ ...acc, ...curr }), {}),
+        'USDT': 1,
+    };
+    
+    return allPrices;
 };

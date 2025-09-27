@@ -22,10 +22,9 @@ const LendBorrow: React.FC = () => {
     const [action, setAction] = useState<Action | null>(null);
     const [amount, setAmount] = useState('');
 
-    const { totalSuppliedValue, totalBorrowedValue, healthFactor } = useMemo(() => {
+    const { totalSuppliedValue, totalBorrowedValue, healthFactor, weightedCollateralValue } = useMemo(() => {
         const suppliedValue = Object.entries(suppliedAssets).reduce((sum, [asset, amount]) => {
             const market = lendingMarket.find(m => m.asset === asset);
-            // FIX: Explicitly handle potential undefined amount before arithmetic operation.
             const numericAmount = amount || 0;
             const price = market?.price || 0;
             return sum + (numericAmount * price);
@@ -33,24 +32,22 @@ const LendBorrow: React.FC = () => {
 
         const borrowedValue = Object.entries(borrowedAssets).reduce((sum, [asset, amount]) => {
             const market = lendingMarket.find(m => m.asset === asset);
-            // FIX: Explicitly handle potential undefined amount before arithmetic operation.
             const numericAmount = amount || 0;
             const price = market?.price || 0;
             return sum + (numericAmount * price);
         }, 0);
 
-        const weightedCollateralValue = Object.entries(suppliedAssets).reduce((sum, [asset, amount]) => {
+        const weightedCollateral = Object.entries(suppliedAssets).reduce((sum, [asset, amount]) => {
             const market = lendingMarket.find(m => m.asset === asset);
-            // FIX: Explicitly handle potential undefined amount and factors before arithmetic operation.
             const numericAmount = amount || 0;
             const price = market?.price || 0;
             const collateralFactor = market?.collateralFactor || 0;
             return sum + (numericAmount * price * collateralFactor);
         }, 0);
         
-        const hf = borrowedValue > 0 ? weightedCollateralValue / borrowedValue : Infinity;
+        const hf = borrowedValue > 0 ? weightedCollateral / borrowedValue : Infinity;
 
-        return { totalSuppliedValue: suppliedValue, totalBorrowedValue: borrowedValue, healthFactor: hf };
+        return { totalSuppliedValue: suppliedValue, totalBorrowedValue: borrowedValue, healthFactor: hf, weightedCollateralValue: weightedCollateral };
     }, [suppliedAssets, borrowedAssets, lendingMarket]);
     
     const getHealthInfo = (hf: number): { text: string; color: string; percentage: number } => {
@@ -105,11 +102,11 @@ const LendBorrow: React.FC = () => {
     );
     
     if (selectedAsset && action) {
-        const isDeposit = action === 'supply' || action === 'withdraw';
+        const borrowLimitUsd = weightedCollateralValue - totalBorrowedValue;
         const maxAmount = action === 'supply' ? (availableBalances[selectedAsset.asset] || 0)
                         : action === 'withdraw' ? (suppliedAssets[selectedAsset.asset] || 0)
                         : action === 'repay' ? Math.min((availableBalances[selectedAsset.asset] || 0), (borrowedAssets[selectedAsset.asset] || 0))
-                        : (totalSuppliedValue * (selectedAsset.collateralFactor || 0) - totalBorrowedValue) / selectedAsset.price; // Simplified borrow limit
+                        : (selectedAsset.price > 0 ? Math.max(0, borrowLimitUsd / selectedAsset.price) : 0);
         
         return (
             <div className="space-y-4 animate-fade-in">

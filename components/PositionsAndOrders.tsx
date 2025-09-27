@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState } from 'react';
 import { useTradeHistory } from '../contexts/TradeHistoryContext';
 import { Order, OrderStatus, OrderType, FuturesPosition } from '../types';
@@ -108,7 +109,7 @@ const PositionsAndOrders: React.FC = () => {
     </div>
   );
   
-  const ASSET_NAMES: Record<keyof Omit<typeof balances, 'usdt_sol'>, string> = {
+  const ASSET_NAMES: Record<string, string> = {
     usdt: "Tether",
     btc: "Bitcoin",
     eth: "Ethereum",
@@ -116,7 +117,7 @@ const PositionsAndOrders: React.FC = () => {
     bnb: "BNB",
     doge: "Dogecoin",
     gdp: "LP Token"
-  }
+  };
 
 
   return (

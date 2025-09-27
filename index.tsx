@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './components/App';
 import { MarketDataProvider } from './contexts/MarketDataContext';
 import { TradeHistoryProvider } from './contexts/TradeHistoryContext';
+import { WalletProvider } from './contexts/WalletContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -12,10 +13,12 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <MarketDataProvider>
-      <TradeHistoryProvider>
-        <App />
-      </TradeHistoryProvider>
-    </MarketDataProvider>
+    <WalletProvider>
+      <MarketDataProvider>
+        <TradeHistoryProvider>
+          <App />
+        </TradeHistoryProvider>
+      </MarketDataProvider>
+    </WalletProvider>
   </React.StrictMode>
 );

@@ -1,21 +1,81 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { LogoIcon } from './icons/LogoIcon';
 import { useTradeHistory } from '../contexts/TradeHistoryContext';
+import { useWallet } from '../contexts/WalletContext';
 
 const Header: React.FC = () => {
-  const [isWalletConnected, setIsWalletConnected] = useState(false);
-  const { isPaperTrading, toggleTradeMode, paperPnl, resetPaperAccount } = useTradeHistory();
-
-  const handleConnectWallet = () => {
-    // Simulate a wallet connection with a placeholder message
-    alert('Wallet connected successfully! (Simulation)');
-    setIsWalletConnected(true);
-  };
+  const { isPaperTrading, toggleTradeMode, paperPnl, realPnl, resetPaperAccount } = useTradeHistory();
+  const { connectWallet, disconnectWallet, isConnected, address, wrongNetwork } = useWallet();
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   
-  const isPnlPositive = paperPnl.value >= 0;
+  const activePnl = isPaperTrading ? paperPnl : realPnl;
+  const isPnlPositive = activePnl.value >= 0;
+
+  const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const WalletButton: React.FC = () => {
+    if (wrongNetwork) {
+      return (
+         <button
+            onClick={connectWallet} // This will trigger the switch network prompt
+            className="text-white text-sm font-semibold px-4 py-2 rounded-md transition-all bg-brand-red hover:bg-opacity-90"
+          >
+            Wrong Network
+          </button>
+      )
+    }
+
+    if (isConnected && address) {
+      return (
+        <div className="relative" ref={dropdownRef}>
+           <button
+            onClick={() => setIsDropdownOpen(prev => !prev)}
+            className="text-white text-sm font-mono px-4 py-2 rounded-md transition-all bg-brand-green flex items-center gap-2"
+          >
+            {truncateAddress(address)}
+            <svg className={`w-3 h-3 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          {isDropdownOpen && (
+             <div className="absolute top-full right-0 mt-2 w-40 bg-brand-surface border border-brand-border rounded-md shadow-lg z-20">
+              <button
+                onClick={() => {
+                  disconnectWallet();
+                  setIsDropdownOpen(false);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-brand-secondary hover:text-white hover:bg-brand-border"
+              >
+                Disconnect
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+    
+    return (
+       <button
+          onClick={connectWallet}
+          className="text-white text-sm font-semibold px-4 py-2 rounded-md transition-all bg-brand-primary hover:bg-opacity-90"
+        >
+          Connect Wallet
+        </button>
+    );
+  };
+
 
   return (
-    <header className="bg-brand-surface border-b border-brand-border p-4">
+    <header className={`bg-brand-surface border-b border-brand-border p-4 transition-all ${!isPaperTrading ? 'border-t-4 border-brand-green' : ''}`}>
       <div className="container mx-auto flex justify-between items-center gap-4 flex-wrap">
         <div className="flex items-center gap-4">
           <LogoIcon />
@@ -29,17 +89,17 @@ const Header: React.FC = () => {
         </nav>
 
         <div className="flex items-center gap-4">
-          {isPaperTrading && (
-            <div className="flex items-center gap-3 bg-brand-bg px-3 py-1.5 rounded-md border border-brand-primary/50">
-              <div>
-                <span className="text-xs text-brand-secondary block">Paper Trading PNL</span>
-                <p className={`text-sm font-mono font-semibold ${isPnlPositive ? 'text-green-400' : 'text-red-400'}`}>
-                    {isPnlPositive ? '+' : ''}{paperPnl.value.toFixed(2)} USDT ({isPnlPositive ? '+' : ''}{paperPnl.percentage.toFixed(2)}%)
-                </p>
-              </div>
-              <button onClick={resetPaperAccount} className="text-xs text-brand-secondary hover:text-brand-red transition-colors">Reset</button>
+          <div className={`flex items-center gap-3 bg-brand-bg px-3 py-1.5 rounded-md border ${isPaperTrading ? 'border-brand-primary/50' : 'border-brand-green/50'}`}>
+            <div>
+              <span className="text-xs text-brand-secondary block">{isPaperTrading ? 'Paper Trading' : 'Live Account'} PNL</span>
+              <p className={`text-sm font-mono font-semibold ${isPnlPositive ? 'text-green-400' : 'text-red-400'}`}>
+                  {isPnlPositive ? '+' : ''}{activePnl.value.toFixed(2)} USDT ({isPnlPositive ? '+' : ''}{activePnl.percentage.toFixed(2)}%)
+              </p>
             </div>
-          )}
+            {isPaperTrading && (
+              <button onClick={resetPaperAccount} className="text-xs text-brand-secondary hover:text-brand-red transition-colors">Reset</button>
+            )}
+          </div>
 
           <div className="flex items-center gap-2">
               <span className={`text-xs font-semibold ${!isPaperTrading ? 'text-white' : 'text-brand-secondary'}`}>Live</span>
@@ -49,18 +109,10 @@ const Header: React.FC = () => {
               </label>
               <span className={`text-xs font-semibold ${isPaperTrading ? 'text-brand-primary' : 'text-brand-secondary'}`}>Paper</span>
           </div>
-
-          <button
-            onClick={handleConnectWallet}
-            disabled={isWalletConnected}
-            className={`text-white text-sm font-semibold px-4 py-2 rounded-md transition-all hidden sm:block ${
-              isWalletConnected
-                ? 'bg-brand-green cursor-default'
-                : 'bg-brand-primary hover:bg-opacity-90'
-            }`}
-          >
-            {isWalletConnected ? 'Wallet Connected' : 'Connect Wallet'}
-          </button>
+          
+          <div className="hidden sm:block">
+            <WalletButton />
+          </div>
         </div>
       </div>
     </header>
