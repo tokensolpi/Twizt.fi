@@ -1,14 +1,17 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { LogoIcon } from './icons/LogoIcon';
 import { useTradeHistory } from '../contexts/TradeHistoryContext';
 import { useWallet } from '../contexts/WalletContext';
-import { ARBITRUM_BLOCK_EXPLORER, ARBITRUM_CHAIN_ID } from '../constants';
+import { ARBITRUM_BLOCK_EXPLORER } from '../constants';
 import GasTracker from './GasTracker';
+import { useTheme } from '../contexts/ThemeContext';
+import { SunIcon } from './icons/SunIcon';
+import { MoonIcon } from './icons/MoonIcon';
 
 const Header: React.FC = () => {
   const { isPaperTrading, toggleTradeMode, paperPnl, realPnl, resetPaperAccount, balances } = useTradeHistory();
   const { connectWallet, disconnectWallet, isConnected, address, wrongNetwork, l1Balance } = useWallet();
+  const { theme, toggleTheme } = useTheme();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
@@ -55,13 +58,13 @@ const Header: React.FC = () => {
                   <p className="text-xs text-brand-secondary mb-1">Balances</p>
                   <div className="flex justify-between items-center">
                     <span className="text-brand-secondary">Arbitrum Sepolia:</span>
-                    <span className="font-mono text-white">
+                    <span className="font-mono text-brand-text-primary">
                       {balances.eth.toFixed(5)} ETH
                     </span>
                   </div>
                   <div className="flex justify-between items-center mt-1">
                     <span className="text-brand-secondary">Ethereum Sepolia:</span>
-                    <span className="font-mono text-white">
+                    <span className="font-mono text-brand-text-primary">
                       {l1Balance ? parseFloat(l1Balance).toFixed(5) : '0.00000'} ETH
                     </span>
                   </div>
@@ -70,7 +73,7 @@ const Header: React.FC = () => {
                   href={`${ARBITRUM_BLOCK_EXPLORER}/address/${address}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block w-full text-left px-4 py-2 text-brand-secondary hover:text-white hover:bg-brand-border/50"
+                  className="block w-full text-left px-4 py-2 text-brand-text-secondary hover:text-brand-text-primary hover:bg-brand-border/50"
                 >
                   View on Explorer
                 </a>
@@ -79,7 +82,7 @@ const Header: React.FC = () => {
                     disconnectWallet();
                     setIsDropdownOpen(false);
                   }}
-                  className="w-full text-left px-4 py-2 text-brand-secondary hover:text-white hover:bg-brand-border/50 rounded-b-md"
+                  className="w-full text-left px-4 py-2 text-brand-text-secondary hover:text-brand-text-primary hover:bg-brand-border/50 rounded-b-md"
                 >
                   Disconnect
                 </button>
@@ -105,21 +108,22 @@ const Header: React.FC = () => {
       <div className="container mx-auto flex justify-between items-center gap-4 flex-wrap">
         <div className="flex items-center gap-4">
           <LogoIcon />
-          <h1 className="text-white text-xl font-bold">Twizted Divergence</h1>
+          <h1 className="text-brand-text-primary text-xl font-bold">Twizted Perps</h1>
         </div>
         <nav className="hidden md:flex items-center gap-6 text-sm">
-          <a href="#" className="text-white hover:text-brand-primary transition-colors">Trade</a>
-          <a href="#" className="hover:text-brand-primary transition-colors">Futures</a>
+          <a href="#" className="text-brand-text-primary hover:text-brand-primary transition-colors">Perps</a>
           <a href="#" className="hover:text-brand-primary transition-colors">Portfolio</a>
           <a href="https://solana.com/developers/cookbook" target="_blank" rel="noopener noreferrer" className="hover:text-brand-primary transition-colors">Docs</a>
         </nav>
 
         <div className="flex items-center gap-4">
-          {ARBITRUM_CHAIN_ID === '42161' && (
-            <div className="hidden lg:block">
-              <GasTracker />
-            </div>
-          )}
+          <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-brand-surface transition-colors">
+            {theme === 'dark' ? <SunIcon className="h-5 w-5 text-yellow-400" /> : <MoonIcon className="h-5 w-5 text-brand-primary" />}
+          </button>
+          
+          <div className="hidden lg:block">
+            <GasTracker />
+          </div>
 
           <div className={`flex items-center gap-3 bg-brand-bg px-3 py-1.5 rounded-md border ${isPaperTrading ? 'border-brand-primary/50' : 'border-brand-green/50'}`}>
             <div>
@@ -134,10 +138,10 @@ const Header: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-              <span className={`text-xs font-semibold ${!isPaperTrading ? 'text-white' : 'text-brand-secondary'}`}>Live</span>
+              <span className={`text-xs font-semibold ${!isPaperTrading ? 'text-brand-text-primary' : 'text-brand-secondary'}`}>Live</span>
               <label className="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" checked={isPaperTrading} onChange={toggleTradeMode} className="sr-only peer" />
-                  <div className="w-9 h-5 bg-brand-bg border border-brand-border rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-brand-secondary after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-primary peer-checked:after:bg-white"></div>
+                  <div className="w-9 h-5 bg-brand-bg border border-brand-border rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-brand-secondary after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-primary dark:after:bg-white after:bg-brand-text-secondary"></div>
               </label>
               <span className={`text-xs font-semibold ${isPaperTrading ? 'text-brand-primary' : 'text-brand-secondary'}`}>Paper</span>
           </div>

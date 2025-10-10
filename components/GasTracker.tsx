@@ -10,7 +10,7 @@ const GasTracker: React.FC = () => {
     return (
       <div className="text-center">
         <p className="text-xs text-brand-secondary">{label}</p>
-        <p className="text-white font-mono text-sm">{value}</p>
+        <p className="text-brand-text-primary font-mono text-sm">{value}</p>
       </div>
     );
   };
@@ -30,7 +30,7 @@ const GasTracker: React.FC = () => {
             {renderFee(gasPrices.high.suggestedMaxFeePerGas, 'High')}
              <div className="pl-2 border-l border-brand-border">
                 <p className="text-xs text-brand-secondary">Gwei</p>
-                <p className="text-white font-mono text-sm">ETH L1</p>
+                <p className="text-brand-text-primary font-mono text-sm">ETH L1</p>
             </div>
           </>
         )}

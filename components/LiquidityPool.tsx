@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useTradeHistory } from '../contexts/TradeHistoryContext';
 
@@ -60,30 +59,30 @@ const Pools: React.FC = () => {
 
     return (
         <div className="space-y-4">
-            <h3 className="text-white font-semibold text-base">Cross-Chain Liquidity Pools</h3>
+            <h3 className="text-brand-text-primary font-semibold text-base">Cross-Chain Liquidity Pools</h3>
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center text-xs p-2 bg-brand-bg rounded-md">
                 <div>
                     <span className="text-brand-secondary block">Pool TVL</span>
-                    <span className="text-white font-mono">${totalPoolValue.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
+                    <span className="text-brand-text-primary font-mono">${totalPoolValue.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
                 </div>
                  <div>
                     <span className="text-brand-secondary block">USDT</span>
-                    <span className="text-white font-mono">{liquidityPool.usdt.toLocaleString()}</span>
+                    <span className="text-brand-text-primary font-mono">{liquidityPool.usdt.toLocaleString()}</span>
                 </div>
                  <div>
                     <span className="text-brand-secondary block">USDT (SOL)</span>
-                    <span className="text-white font-mono">{liquidityPool.usdt_sol.toLocaleString()}</span>
+                    <span className="text-brand-text-primary font-mono">{liquidityPool.usdt_sol.toLocaleString()}</span>
                 </div>
                 <div>
                     <span className="text-brand-secondary block">Your Share</span>
-                    <span className="text-white font-mono">{userPoolShare.toFixed(4)}%</span>
+                    <span className="text-brand-text-primary font-mono">{userPoolShare.toFixed(4)}%</span>
                 </div>
             </div>
 
              <div className="flex justify-center border-b border-brand-border">
-                <button onClick={() => setAction('deposit')} className={`w-1/2 py-2 text-sm font-semibold transition-colors ${action === 'deposit' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-brand-secondary hover:text-white'}`}>Deposit</button>
-                <button onClick={() => setAction('withdraw')} className={`w-1/2 py-2 text-sm font-semibold transition-colors ${action === 'withdraw' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-brand-secondary hover:text-white'}`}>Withdraw</button>
+                <button onClick={() => setAction('deposit')} className={`w-1/2 py-2 text-sm font-semibold transition-colors ${action === 'deposit' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-brand-secondary hover:text-brand-text-primary'}`}>Deposit</button>
+                <button onClick={() => setAction('withdraw')} className={`w-1/2 py-2 text-sm font-semibold transition-colors ${action === 'withdraw' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-brand-secondary hover:text-brand-text-primary'}`}>Withdraw</button>
             </div>
 
             <div className="space-y-3">
@@ -91,21 +90,21 @@ const Pools: React.FC = () => {
                     <label className="text-xs text-brand-secondary mb-1 block">
                         {action === 'deposit' ? 'Asset to Deposit' : 'Asset to Receive'}
                     </label>
-                    <select value={asset} onChange={e => setAsset(e.target.value as Asset)} className="w-full bg-brand-bg border border-brand-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary">
+                    <select value={asset} onChange={e => setAsset(e.target.value as Asset)} className="w-full bg-brand-bg border border-brand-border rounded-md px-3 py-2 text-brand-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary">
                         <option value="usdt">USDT (Ethereum)</option>
                         <option value="usdt_sol">USDT (Solana)</option>
                     </select>
                 </div>
                 <div>
                     <label className="text-xs text-brand-secondary mb-1 block">Amount</label>
-                    <input type="number" value={amount} onChange={e => {setAmount(e.target.value); setError(null); setSuccess(null);}} placeholder="0.0" className="w-full bg-brand-bg border border-brand-border rounded-md px-3 py-2 text-white placeholder-brand-secondary text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary font-mono" />
+                    <input type="number" value={amount} onChange={e => {setAmount(e.target.value); setError(null); setSuccess(null);}} placeholder="0.0" className="w-full bg-brand-bg border border-brand-border rounded-md px-3 py-2 text-brand-text-primary placeholder-brand-secondary text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary font-mono" />
                 </div>
             </div>
 
             <div className="border-t border-brand-border pt-3 space-y-2 text-xs">
                  <div className="flex justify-between text-brand-secondary">
                     <span>Available Balance</span>
-                    <span className="font-mono text-white">
+                    <span className="font-mono text-brand-text-primary">
                         {action === 'deposit' 
                             ? `${(asset === 'usdt' ? balances.usdt : balances.usdt_sol).toFixed(2)} ${asset.toUpperCase().replace('_SOL', ' (SOL)')}`
                             : `${balances.gdp.toFixed(4)} GDP`
@@ -114,7 +113,7 @@ const Pools: React.FC = () => {
                 </div>
                 <div className="flex justify-between text-brand-secondary">
                     <span>You will {action === 'deposit' ? 'receive (est.)' : 'receive (est.)'}</span>
-                    <span className="font-mono text-white">{amountNum > 0 ? estimatedResult : '0.00'}</span>
+                    <span className="font-mono text-brand-text-primary">{amountNum > 0 ? estimatedResult : '0.00'}</span>
                 </div>
             </div>
 

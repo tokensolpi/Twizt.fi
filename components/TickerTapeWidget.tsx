@@ -1,14 +1,16 @@
-
 import React, { useEffect, useRef, memo } from 'react';
+import { useTheme } from '../contexts/ThemeContext';
 
 const TickerTapeWidget: React.FC = () => {
   const container = useRef<HTMLDivElement>(null);
+  const { theme } = useTheme();
 
   useEffect(() => {
-    // Ensure the effect runs only once by checking if the script has already been added.
-    if (!container.current || container.current.hasChildNodes()) {
+    if (!container.current) {
       return;
     }
+    // Clear previous widget before re-rendering on theme change
+    container.current.innerHTML = '';
 
     const script = document.createElement("script");
     script.src = "https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js";
@@ -18,17 +20,18 @@ const TickerTapeWidget: React.FC = () => {
       "symbols": [
         { "proName": "BINANCE:BTCUSDT", "title": "Bitcoin" },
         { "proName": "BINANCE:ETHUSDT", "title": "Ethereum" },
-        { "proName": "BINANCE:SOLUSDT", "title": "Solana" }
+        { "proName": "BINANCE:SOLUSDT", "title": "Solana" },
+        { "proName": "BINANCE:LINKUSDT", "title": "Chainlink" }
       ],
       "showSymbolLogo": true,
-      "colorTheme": "dark",
+      "colorTheme": theme,
       "isTransparent": true,
       "displayMode": "adaptive",
       "locale": "en"
     });
 
     container.current.appendChild(script);
-  }, []);
+  }, [theme]);
 
   // The outer div provides a background and border consistent with the app's theme.
   return (

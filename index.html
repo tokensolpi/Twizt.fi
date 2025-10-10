@@ -4,12 +4,65 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Twizted Divergence DEX</title>
+    <title>Twizted Perps Testnet</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* CSS Variables for Theming */
+      :root {
+        --brand-bg: 255 255 255;
+        --brand-surface: 249 250 251;
+        --brand-border: 229 231 235;
+        --brand-primary: 37 99 235;
+        --brand-secondary: 107 114 128;
+        --brand-text-primary: 31 41 55;
+        --brand-text-secondary: 107 114 128;
+        --brand-green: 22 163 74;
+        --brand-red: 220 38 38;
+        --brand-green-light-rgba: rgba(22, 163, 74, 0.1);
+        --brand-red-light-rgba: rgba(220, 38, 38, 0.1);
+      }
+      [data-theme='dark'] {
+        --brand-bg: 13 17 23;
+        --brand-surface: 22 27 34;
+        --brand-border: 48 54 61;
+        --brand-primary: 88 166 255;
+        --brand-secondary: 139 148 158;
+        --brand-text-primary: 255 255 255;
+        --brand-text-secondary: 139 148 158;
+        --brand-green: 35 134 54;
+        --brand-red: 218 54 51;
+        --brand-green-light-rgba: rgba(35, 134, 54, 0.15);
+        --brand-red-light-rgba: rgba(218, 54, 51, 0.15);
+      }
+
+      /* Custom scrollbar for a consistent theme */
+      ::-webkit-scrollbar { width: 8px; }
+      ::-webkit-scrollbar-track { background: rgb(var(--brand-surface)); }
+      ::-webkit-scrollbar-thumb { background: rgb(var(--brand-border)); border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: rgb(var(--brand-secondary)); }
+
+      /* Remove spinners from number inputs */
+      input[type='number']::-webkit-inner-spin-button,
+      input[type='number']::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      input[type='number'] { -moz-appearance: textfield; }
+    </style>
     <script>
+      // Function to get color with opacity support from CSS variables
+      const withOpacity = (variableName) => {
+        return ({ opacityValue }) => {
+          if (opacityValue !== undefined) {
+            return `rgba(var(${variableName}), ${opacityValue})`;
+          }
+          return `rgb(var(${variableName}))`;
+        };
+      };
+
       tailwind.config = {
         theme: {
           extend: {
@@ -17,15 +70,17 @@
               sans: ['Inter', 'sans-serif'],
             },
             colors: {
-              'brand-bg': '#0D1117',
-              'brand-surface': '#161B22',
-              'brand-border': '#30363D',
-              'brand-primary': '#58A6FF',
-              'brand-secondary': '#8B949E',
-              'brand-green': '#238636',
-              'brand-red': '#DA3633',
-              'brand-green-light': 'rgba(35, 134, 54, 0.15)',
-              'brand-red-light': 'rgba(218, 54, 51, 0.15)',
+              'brand-bg': withOpacity('--brand-bg'),
+              'brand-surface': withOpacity('--brand-surface'),
+              'brand-border': withOpacity('--brand-border'),
+              'brand-primary': withOpacity('--brand-primary'),
+              'brand-secondary': withOpacity('--brand-secondary'),
+              'brand-text-primary': withOpacity('--brand-text-primary'),
+              'brand-text-secondary': withOpacity('--brand-text-secondary'),
+              'brand-green': withOpacity('--brand-green'),
+              'brand-red': withOpacity('--brand-red'),
+              'brand-green-light': 'var(--brand-green-light-rgba)',
+              'brand-red-light': 'var(--brand-red-light-rgba)',
             },
             keyframes: {
               'fade-in': {
@@ -40,21 +95,6 @@
         }
       }
     </script>
-    <style>
-      /* Custom scrollbar for a consistent dark theme */
-      ::-webkit-scrollbar { width: 8px; }
-      ::-webkit-scrollbar-track { background: #161B22; }
-      ::-webkit-scrollbar-thumb { background: #30363D; border-radius: 4px; }
-      ::-webkit-scrollbar-thumb:hover { background: #485058; }
-
-      /* Remove spinners from number inputs */
-      input[type='number']::-webkit-inner-spin-button,
-      input[type='number']::-webkit-outer-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-      }
-      input[type='number'] { -moz-appearance: textfield; }
-    </style>
   <script type="importmap">
 {
   "imports": {
@@ -67,7 +107,7 @@
 }
 </script>
 </head>
-  <body class="bg-brand-bg font-sans">
+  <body class="font-sans">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

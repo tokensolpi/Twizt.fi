@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { getGasFees } from '../services/gasService';
-import { GasPrices } from '../types';
+import { ethers } from 'ethers';
+import { GasPrices, GasFeeSuggestion } from '../types';
+import { ETHEREUM_L1_RPC_URL } from '../constants';
 
 interface GasPriceContextValue {
   gasPrices: GasPrices | null;
@@ -27,10 +28,35 @@ export const GasPriceProvider: React.FC<{ children: ReactNode }> = ({ children }
     const fetchAndSetGasPrices = async () => {
       try {
         setError(null);
-        const fees = await getGasFees();
-        setGasPrices(fees);
+        const l1Provider = new ethers.JsonRpcProvider(ETHEREUM_L1_RPC_URL);
+        const feeData = await l1Provider.getFeeData();
+        
+        if (!feeData.maxFeePerGas || !feeData.maxPriorityFeePerGas) {
+            throw new Error("EIP-1559 gas data not available.");
+        }
+
+        const formatGwei = (value: bigint) => ethers.formatUnits(value, 'gwei');
+
+        const medium: GasFeeSuggestion = {
+            suggestedMaxFeePerGas: formatGwei(feeData.maxFeePerGas),
+            suggestedMaxPriorityFeePerGas: formatGwei(feeData.maxPriorityFeePerGas),
+        };
+        
+        // Create synthetic low/high values
+        const low: GasFeeSuggestion = {
+            suggestedMaxFeePerGas: formatGwei(feeData.maxFeePerGas * 80n / 100n), // 80%
+            suggestedMaxPriorityFeePerGas: formatGwei(feeData.maxPriorityFeePerGas * 80n / 100n),
+        };
+
+        const high: GasFeeSuggestion = {
+            suggestedMaxFeePerGas: formatGwei(feeData.maxFeePerGas * 120n / 100n), // 120%
+            suggestedMaxPriorityFeePerGas: formatGwei(feeData.maxPriorityFeePerGas * 120n / 100n),
+        };
+
+        setGasPrices({ low, medium, high });
+
       } catch (e) {
-        setError('Failed to load gas fees.');
+        setError('Failed to load L1 gas fees.');
         console.error(e);
       } finally {
         setIsLoading(false);

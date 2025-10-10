@@ -1,11 +1,10 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback, useRef } from 'react';
 import { ethers } from 'ethers';
 import { Order, OrderStatus, OrderType, Balances, FuturesPosition, PositionSide, LiquidityPoolState, MarketMakerBot, TradingState, LendingMarketAsset } from '../types';
 import { useMarketData } from './MarketDataContext';
 import { getOraclePrices } from '../services/oracleService';
 import { useWallet } from './WalletContext';
-import { TOKEN_CONTRACTS_ARBITRUM, MINIMAL_ERC20_ABI } from '../constants';
+import { TOKEN_CONTRACTS_ARBITRUM, MINIMAL_ERC20_ABI, DEX_CONTRACT_ADDRESS } from '../constants';
 
 const LENDING_MARKET_CONFIG: Omit<LendingMarketAsset, 'totalSupplied' | 'totalBorrowed' | 'price' | 'name'>[] = [
     { asset: 'usdt', supplyApy: 4.5, borrowApy: 6.2, collateralFactor: 0.85 },
@@ -32,7 +31,7 @@ interface TradeHistoryContextValue {
   realPnl: PaperPnl;
   toggleTradeMode: () => void;
   resetPaperAccount: () => void;
-  placeOrder: (order: { type: OrderType; price: number; amount: number; pair: string; }) => Order | undefined;
+  placeOrder: (order: { type: OrderType; price: number; amount: number; pair: string; }, botId?: string) => Promise<Order | void>;
   cancelOrder: (orderId: string) => void;
   openFuturesPosition: (data: { side: PositionSide; price: number; amount: number; leverage: number; pair: string; stopLoss?: number; takeProfit?: number; }) => void;
   closeFuturesPosition: (positionId: string) => void;
@@ -70,13 +69,13 @@ export const useTradeHistory = () => {
 };
 
 const initialRealState: TradingState = {
-  balances: { usdt: 0, btc: 0, eth: 0, sol: 0, bnb: 0, doge: 0, usdt_sol: 0, gdp: 0 },
+  balances: { usdt: 0, btc: 0, eth: 0, sol: 0, link: 0, usdt_sol: 0, gdp: 0 },
   openOrders: [], orderHistory: [], futuresPositions: [], marketMakerBots: [],
   suppliedAssets: {}, borrowedAssets: {}, stakedGdp: 0, gdpRewards: 0,
 };
 
 const initialPaperState: TradingState = {
-  balances: { usdt: 100000, btc: 10, eth: 200, sol: 1000, bnb: 500, doge: 1000000, usdt_sol: 0, gdp: 0 },
+  balances: { usdt: 100000, btc: 10, eth: 200, sol: 1000, link: 5000, usdt_sol: 0, gdp: 0 },
   openOrders: [], orderHistory: [], futuresPositions: [], marketMakerBots: [],
   suppliedAssets: { usdt: 5000, btc: 1 }, borrowedAssets: { sol: 10 }, stakedGdp: 0, gdpRewards: 0,
 };
@@ -86,7 +85,7 @@ const PAPER_INITIAL_VALUE_KEY = 'twiztedDivergence_paperInitialValue';
 
 export const TradeHistoryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { marketData, currentPair } = useMarketData();
-  const { provider, address, isConnected } = useWallet();
+  const { provider, signer, address, isConnected } = useWallet();
   const [isPaperTrading, setIsPaperTrading] = useState(true);
   const [assetPrices, setAssetPrices] = useState<Record<string, number>>({});
 
@@ -162,13 +161,14 @@ export const TradeHistoryProvider: React.FC<{ children: ReactNode }> = ({ childr
   // Effect to set initial portfolio value for PnL calculation for REAL account
   useEffect(() => {
     if (!isPaperTrading && isConnected && initialRealValueRef.current === null && Object.keys(assetPrices).length > 2) {
-        // FIX: Explicitly cast balance value to number to prevent type errors.
-        const totalBalanceValue = Object.values(realState.balances).reduce((a, b) => a + (Number(b) || 0), 0);
+        // Fix: The type of `b` was being inferred as `unknown` from `Object.values`. Explicitly casting the
+        // result of Object.values to `number[]` ensures correct type inference for the `reduce` operation.
+        const totalBalanceValue = (Object.values(realState.balances) as number[]).reduce((a, b) => a + b, 0);
         if (totalBalanceValue > 0) { // Check if balances are actually populated
             const initialValue = Object.entries(realState.balances).reduce((total, [asset, amount]) => {
                 const priceKey = asset.toUpperCase().split('_')[0];
                 const price = assetPrices[priceKey] || (asset.includes('usdt') ? 1 : 0);
-                // FIX: Explicitly cast `amount` to `number` to resolve TS inference issue.
+                // Fix: The type of `amount` is inferred as `unknown`. Casting to `Number` ensures the multiplication is valid.
                 return total + (Number(amount) * price);
             }, 0);
             initialRealValueRef.current = initialValue;
@@ -224,7 +224,70 @@ export const TradeHistoryProvider: React.FC<{ children: ReactNode }> = ({ childr
   const setState = isPaperTrading ? setPaperState : setRealState;
   
   // Spot Order Logic
-  const placeOrder = useCallback((orderData: { type: OrderType; price: number; amount: number; pair: string; }, botId?: string): Order | undefined => {
+  const placeOrder = useCallback(async (orderData: { type: OrderType; price: number; amount: number; pair: string; }, botId?: string): Promise<Order | void> => {
+    
+    // --- Live On-Chain Trading Logic ---
+    if (!isPaperTrading) {
+      if (!signer || !address) throw new Error("Wallet not connected");
+
+      const [baseAsset, quoteAsset] = orderData.pair.split('/');
+      const baseAssetLower = baseAsset.toLowerCase() as keyof Balances;
+      const quoteAssetLower = quoteAsset.toLowerCase() as keyof Balances;
+      const total = orderData.price * orderData.amount;
+      
+      const tokenInfo = TOKEN_CONTRACTS_ARBITRUM[quoteAssetLower];
+      if (!tokenInfo) throw new Error(`Unsupported quote asset: ${quoteAssetLower}`);
+
+      const tokenContract = new ethers.Contract(tokenInfo.address, MINIMAL_ERC20_ABI, signer);
+      const totalInUnits = ethers.parseUnits(total.toFixed(tokenInfo.decimals), tokenInfo.decimals);
+      
+      const currentAllowance = await tokenContract.allowance(address, DEX_CONTRACT_ADDRESS);
+
+      let approvalTxHash: string | undefined;
+      if (currentAllowance < totalInUnits) {
+        const approveTx = await tokenContract.approve(DEX_CONTRACT_ADDRESS, totalInUnits);
+        approvalTxHash = approveTx.hash;
+        
+        // Create a pending order immediately for UI feedback
+        const pendingOrder: Order = {
+          id: crypto.randomUUID(), ...orderData, total, status: OrderStatus.PENDING,
+          createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          txHash: approvalTxHash,
+        };
+        setState(prev => ({...prev, openOrders: [pendingOrder, ...prev.openOrders]}));
+        
+        await approveTx.wait(); // Wait for the approval to be mined
+      }
+      
+      // After approval (or if already approved), we simulate the swap and update state
+      // In a real DEX, this would be a second transaction calling the swap function
+      setState(prev => {
+        const newBalances = { ...prev.balances };
+        if (orderData.type === OrderType.BUY) {
+            newBalances[quoteAssetLower] -= total;
+            newBalances[baseAssetLower] = (newBalances[baseAssetLower] || 0) + orderData.amount;
+        } else {
+            newBalances[quoteAssetLower] += total;
+            newBalances[baseAssetLower] -= orderData.amount;
+        }
+
+        const filledOrder: Order = {
+          id: crypto.randomUUID(), ...orderData, total, status: OrderStatus.FILLED, 
+          createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          txHash: approvalTxHash,
+        };
+
+        return {
+          ...prev,
+          balances: newBalances,
+          openOrders: approvalTxHash ? prev.openOrders.filter(o => o.txHash !== approvalTxHash) : prev.openOrders,
+          orderHistory: [filledOrder, ...prev.orderHistory],
+        };
+      });
+      return;
+    }
+
+    // --- Paper Trading Logic ---
     const newOrder: Order = {
       id: crypto.randomUUID(), ...orderData, total: orderData.price * orderData.amount,
       status: OrderStatus.OPEN, createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -232,11 +295,13 @@ export const TradeHistoryProvider: React.FC<{ children: ReactNode }> = ({ childr
     };
     setState(prev => ({ ...prev, openOrders: [newOrder, ...prev.openOrders]}));
     return newOrder;
-  }, [setState]);
+  }, [setState, isPaperTrading, signer, address]);
 
   const cancelOrder = useCallback((orderId: string, silent = false) => {
     setState(prev => {
         const orderToCancel = prev.openOrders.find(o => o.id === orderId);
+        if (orderToCancel?.status === OrderStatus.PENDING) return prev; // Cannot cancel pending on-chain tx
+        
         const newHistory = (orderToCancel && !silent) 
             ? [{ ...orderToCancel, status: OrderStatus.CANCELLED }, ...prev.orderHistory] 
             : prev.orderHistory;
@@ -262,28 +327,60 @@ export const TradeHistoryProvider: React.FC<{ children: ReactNode }> = ({ childr
   }, [setState]);
   
   const closeFuturesPosition = useCallback((positionId: string) => {
-    const positionToClose = futuresPositions.find(p => p.id === positionId);
-    if (!positionToClose) return;
+    setState(prev => {
+        const positionToClose = prev.futuresPositions.find(p => p.id === positionId);
+        if (!positionToClose) return prev;
 
-    const baseAsset = positionToClose.pair.split('/')[0];
-    const closePrice = assetPrices[baseAsset] || marketData.price; // Use live price if available
+        const baseAsset = positionToClose.pair.split('/')[0];
+        let closePrice: number;
 
-    const pnl = positionToClose.side === PositionSide.LONG
-        ? (closePrice - positionToClose.entryPrice) * positionToClose.size
-        : (positionToClose.entryPrice - closePrice) * positionToClose.size;
+        // If the position's pair is the currently viewed pair, use the real-time mark price.
+        // Otherwise, use the latest fetched oracle price for that asset.
+        if (positionToClose.pair === currentPair) {
+            closePrice = marketData.price;
+        } else {
+            closePrice = assetPrices[baseAsset];
+        }
+        
+        // If for some reason the price isn't available, we can't close it.
+        if (!closePrice) {
+            console.error(`Could not find a close price for ${baseAsset}. Cannot close position.`);
+            return prev;
+        }
 
-    setState(prev => ({
-        ...prev,
-        balances: { ...prev.balances, usdt: prev.balances.usdt + positionToClose.margin + pnl },
-        orderHistory: [{
-            id: positionToClose.id, type: positionToClose.side === PositionSide.LONG ? OrderType.BUY : OrderType.SELL,
-            price: closePrice, amount: positionToClose.size, total: closePrice * positionToClose.size,
-            status: OrderStatus.FILLED, createdAt: positionToClose.createdAt, pair: positionToClose.pair,
+        const pnl = positionToClose.side === PositionSide.LONG
+            ? (closePrice - positionToClose.entryPrice) * positionToClose.size
+            : (positionToClose.entryPrice - closePrice) * positionToClose.size;
+
+        const newBalances = {
+            ...prev.balances,
+            usdt: prev.balances.usdt + positionToClose.margin + pnl
+        };
+
+        const filledOrder: Order = {
+            id: crypto.randomUUID(),
+            pair: positionToClose.pair,
+            type: positionToClose.side === PositionSide.LONG ? OrderType.SELL : OrderType.BUY, // Closing a LONG is a SELL
+            price: closePrice,
+            amount: positionToClose.size,
+            total: closePrice * positionToClose.size,
+            status: OrderStatus.FILLED,
+            createdAt: positionToClose.createdAt,
             filledAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        }, ...prev.orderHistory],
-        futuresPositions: prev.futuresPositions.filter(p => p.id !== positionId),
-    }));
-}, [marketData.price, futuresPositions, setState, currentPair, assetPrices]);
+        };
+
+        const newOrderHistory = [filledOrder, ...prev.orderHistory];
+        
+        const newFuturesPositions = prev.futuresPositions.filter(p => p.id !== positionId);
+
+        return {
+            ...prev,
+            balances: newBalances,
+            orderHistory: newOrderHistory,
+            futuresPositions: newFuturesPositions,
+        };
+    });
+  }, [marketData.price, currentPair, assetPrices, setState]);
 
  // Wormhole Bridge Simulation (operates on real balance only)
  const bridgeAssets = useCallback(async (amount: number) => {
@@ -369,10 +466,10 @@ export const TradeHistoryProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   // Effect for running market simulation: order matching, futures updates, bot logic
   useEffect(() => {
-    if (marketData.price === 0) return;
+    if (marketData.price === 0 || !isPaperTrading) return; // Only run simulation for paper trading
 
     // 1. Process open spot orders (realistic matching)
-    setState(prevState => {
+    setPaperState(prevState => {
       let newState = { ...prevState };
       const ordersToProcess = [...newState.openOrders];
 
@@ -429,7 +526,7 @@ export const TradeHistoryProvider: React.FC<{ children: ReactNode }> = ({ childr
     });
 
     // 2. Update futures PNL and check for liquidations
-    setState(prev => {
+    setPaperState(prev => {
       const positionsToLiquidate: string[] = [];
       const updatedPositions = prev.futuresPositions.map(p => {
         const pnl = p.side === PositionSide.LONG
@@ -461,41 +558,55 @@ export const TradeHistoryProvider: React.FC<{ children: ReactNode }> = ({ childr
       }
       return { ...prev, futuresPositions: updatedPositions };
     });
-
+    
     // 3. Run market maker bot logic (BTC/USDT only for this simulation)
     if (currentPair === 'BTC/USDT') {
-      marketMakerBots.forEach(bot => {
-        if (!bot.isActive) return;
-
-        // Cancel existing orders to replace them
-        bot.orderIds.forEach(id => cancelOrder(id, true));
-        
-        const midPrice = marketData.price;
-        const spreadValue = midPrice * (bot.spread / 100) / 2;
-        const buyPrice = parseFloat((midPrice - spreadValue).toFixed(2));
-        const sellPrice = parseFloat((midPrice + spreadValue).toFixed(2));
-        
-        const newOrderIds: string[] = [];
-
-        if (buyPrice >= bot.priceRangeLower && bot.inventory.usdt >= buyPrice * bot.orderAmount) {
-          const order = placeOrder({ type: OrderType.BUY, price: buyPrice, amount: bot.orderAmount, pair: currentPair }, bot.id);
-          if (order) newOrderIds.push(order.id);
-        }
-
-        if (sellPrice <= bot.priceRangeUpper && bot.inventory.btc >= bot.orderAmount) {
-          const order = placeOrder({ type: OrderType.SELL, price: sellPrice, amount: bot.orderAmount, pair: currentPair }, bot.id);
-          if (order) newOrderIds.push(order.id);
-        }
-        
-        setState(prev => ({
-          ...prev,
-          marketMakerBots: prev.marketMakerBots.map(b => b.id === bot.id ? { ...b, orderIds: newOrderIds } : b)
+      // This IIFE runs the async bot logic. It's safe to ignore the exhaustive-deps lint warning here
+      // because we are managing the async flow carefully to only act on price ticks and avoid stale state.
+      (async () => {
+        const botUpdates = await Promise.all(paperState.marketMakerBots.map(async (bot) => {
+          if (!bot.isActive) {
+            if (bot.orderIds.length > 0) bot.orderIds.forEach(id => cancelOrder(id, true));
+            return { botId: bot.id, newOrderIds: [] };
+          }
+    
+          bot.orderIds.forEach(id => cancelOrder(id, true));
+    
+          const midPrice = marketData.price;
+          const spreadValue = midPrice * (bot.spread / 100) / 2;
+          const buyPrice = parseFloat((midPrice - spreadValue).toFixed(2));
+          const sellPrice = parseFloat((midPrice + spreadValue).toFixed(2));
+    
+          const orderPromises: Promise<Order | void>[] = [];
+    
+          if (buyPrice >= bot.priceRangeLower && bot.inventory.usdt >= buyPrice * bot.orderAmount) {
+            orderPromises.push(placeOrder({ type: OrderType.BUY, price: buyPrice, amount: bot.orderAmount, pair: currentPair }, bot.id));
+          }
+    
+          if (sellPrice <= bot.priceRangeUpper && bot.inventory.btc >= bot.orderAmount) {
+            orderPromises.push(placeOrder({ type: OrderType.SELL, price: sellPrice, amount: bot.orderAmount, pair: currentPair }, bot.id));
+          }
+    
+          const settledOrders = await Promise.all(orderPromises);
+          const newOrderIds = settledOrders.filter((o): o is Order => !!o).map(o => o.id);
+    
+          return { botId: bot.id, newOrderIds };
         }));
-      });
+    
+        if (botUpdates.length > 0) {
+          setPaperState(prev => ({
+            ...prev,
+            marketMakerBots: prev.marketMakerBots.map(bot => {
+              const update = botUpdates.find(u => u.botId === bot.id);
+              return update ? { ...bot, orderIds: update.newOrderIds } : bot;
+            })
+          }));
+        }
+      })();
     }
 
     // 4. Accrue staking rewards
-    setState(prev => {
+    setPaperState(prev => {
       if (prev.stakedGdp > 0) {
         const rewardsPerTick = (prev.stakedGdp * (STAKING_APY / 100) / 31536000) * 8; // APY / seconds_in_year * tick_duration
         return { ...prev, gdpRewards: prev.gdpRewards + rewardsPerTick };
@@ -503,10 +614,12 @@ export const TradeHistoryProvider: React.FC<{ children: ReactNode }> = ({ childr
       return prev;
     });
 
-  }, [marketData.price, isPaperTrading, currentPair]); // Re-run simulation on price/mode change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marketData.price, isPaperTrading, currentPair]);
 
   const availableBalances = useMemo(() => {
     const lockedInOrders = openOrders.reduce((acc, order) => {
+        if (order.status === OrderStatus.PENDING) return acc; // Don't lock funds for pending, they are handled by wallet
         if (order.type === OrderType.BUY) {
             acc.usdt += order.total;
         } else {

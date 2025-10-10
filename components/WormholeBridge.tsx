@@ -46,7 +46,7 @@ const WormholeBridge: React.FC = () => {
 
     return (
         <div className="space-y-4">
-            <h3 className="text-white font-semibold text-base">Wormhole Bridge</h3>
+            <h3 className="text-brand-text-primary font-semibold text-base">Wormhole Bridge</h3>
             <p className="text-sm text-brand-secondary">
                 Transfer assets across different blockchains.
             </p>
@@ -55,7 +55,7 @@ const WormholeBridge: React.FC = () => {
             <div className="p-3 bg-brand-bg border border-brand-border rounded-lg">
                 <label className="text-xs text-brand-secondary mb-1 block">From</label>
                 <div className="flex items-center justify-between">
-                    <span className="text-white font-semibold">Ethereum</span>
+                    <span className="text-brand-text-primary font-semibold">Ethereum</span>
                     <div className="text-right">
                          <input
                             type="number"
@@ -66,7 +66,7 @@ const WormholeBridge: React.FC = () => {
                                 setSuccessMessage(null);
                             }}
                             placeholder="0.0"
-                            className="bg-transparent text-white text-lg font-mono text-right w-full outline-none"
+                            className="bg-transparent text-brand-text-primary text-lg font-mono text-right w-full outline-none"
                             disabled={isLoading}
                         />
                         <span className="text-xs text-brand-secondary">Asset: USDT</span>
@@ -78,9 +78,9 @@ const WormholeBridge: React.FC = () => {
              <div className="p-3 bg-brand-bg border border-brand-border rounded-lg">
                 <label className="text-xs text-brand-secondary mb-1 block">To</label>
                 <div className="flex items-center justify-between">
-                    <span className="text-white font-semibold">Solana</span>
+                    <span className="text-brand-text-primary font-semibold">Solana</span>
                      <div className="text-right">
-                        <p className="text-white text-lg font-mono">{receiveAmount.toFixed(2)}</p>
+                        <p className="text-brand-text-primary text-lg font-mono">{receiveAmount.toFixed(2)}</p>
                         <span className="text-xs text-brand-secondary">Asset: USDT</span>
                     </div>
                 </div>
@@ -90,11 +90,11 @@ const WormholeBridge: React.FC = () => {
              <div className="border-t border-brand-border pt-4 space-y-3 text-xs">
                 <div className="flex justify-between text-brand-secondary">
                     <span>Available Balance</span>
-                    <span className="font-mono text-white">{availableBalances.usdt.toFixed(2)} USDT</span>
+                    <span className="font-mono text-brand-text-primary">{availableBalances.usdt.toFixed(2)} USDT</span>
                 </div>
                 <div className="flex justify-between text-brand-secondary">
                     <span>Bridge Fee (est.)</span>
-                    <span className="font-mono text-white">{bridgeFee.toFixed(2)} USDT</span>
+                    <span className="font-mono text-brand-text-primary">{bridgeFee.toFixed(2)} USDT</span>
                 </div>
             </div>
 

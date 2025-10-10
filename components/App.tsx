@@ -1,6 +1,3 @@
-
-
-
 import React from 'react';
 import Header from './Header';
 import TickerTapeWidget from './TickerTapeWidget';
@@ -18,13 +15,13 @@ const App: React.FC = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-brand-bg flex items-center justify-center">
-        <div className="text-white text-xl animate-pulse">Connecting to EVM Oracle for {currentPair}...</div>
+        <div className="text-brand-text-primary text-xl animate-pulse">Connecting to EVM Oracle for {currentPair}...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-brand-bg text-brand-secondary font-sans animate-fade-in">
+    <div className="min-h-screen bg-brand-bg text-brand-text-secondary font-sans animate-fade-in">
       <Header />
       <TickerTapeWidget />
       <main className="p-2 sm:p-4">

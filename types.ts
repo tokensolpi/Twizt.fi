@@ -1,5 +1,4 @@
-
-// Fix: Removed self-import of types that was causing declaration conflicts.
+// Fix: Removed self-import of `OrderType` that was causing declaration conflicts.
 
 export enum OrderType {
   BUY = 'BUY',
@@ -20,18 +19,26 @@ export interface Trade {
 }
 
 export interface MarketDataState {
-  price: number;
+  price: number; // Mark Price for perpetuals
   price_24h_change: number;
   price_24h_change_percent: number;
   high_24h: number;
   low_24h: number;
-  bids: OrderBookEntry[];
-  asks: OrderBookEntry[];
+  bids: OrderBookEntry[]; // Spot bids
+  asks: OrderBookEntry[]; // Spot asks
+  futuresBids: OrderBookEntry[]; // Futures bids
+  futuresAsks: OrderBookEntry[]; // Futures asks
   trades: Trade[];
+  // New perpetuals-specific data
+  indexPrice: number;
+  fundingRate: number;
+  nextFundingTime: number; // Unix timestamp for the next funding event
+  openInterest: number; // In base asset amount
 }
 
 export enum OrderStatus {
   OPEN = 'OPEN',
+  PENDING = 'PENDING',
   FILLED = 'FILLED',
   CANCELLED = 'CANCELLED',
   LIQUIDATED = 'LIQUIDATED',
@@ -48,6 +55,7 @@ export interface Order {
   createdAt: string;
   filledAt?: string;
   botId?: string; // Identifier for market maker bot orders
+  txHash?: string;
 }
 
 export interface Balances {
@@ -55,8 +63,7 @@ export interface Balances {
   btc: number;
   eth: number;
   sol: number;
-  bnb: number;
-  doge: number;
+  link: number;
   usdt_sol: number;
   gdp: number; // Twizted Divergence LP Token
 }

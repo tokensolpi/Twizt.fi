@@ -47,7 +47,7 @@ const InfoPanel: React.FC = () => {
       className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold border-b-2 transition-colors ${
         activeTab === tab
           ? 'text-brand-primary border-brand-primary bg-brand-bg'
-          : 'text-brand-secondary border-transparent hover:text-white hover:bg-brand-border/20'
+          : 'text-brand-secondary border-transparent hover:text-brand-text-primary hover:bg-brand-border/20'
       }`}
     >
       {icon}

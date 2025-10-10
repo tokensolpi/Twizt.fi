@@ -64,19 +64,19 @@ const MarketMakerBots: React.FC = () => {
         <div className="grid grid-cols-2 gap-2 my-3 font-mono">
             <div>
                 <span className="text-brand-secondary">Range (USDT)</span>
-                <p className="text-white">{bot.priceRangeLower} - {bot.priceRangeUpper}</p>
+                <p className="text-brand-text-primary">{bot.priceRangeLower} - {bot.priceRangeUpper}</p>
             </div>
             <div>
                 <span className="text-brand-secondary">Spread / Order Size</span>
-                <p className="text-white">{bot.spread}% / {bot.orderAmount} BTC</p>
+                <p className="text-brand-text-primary">{bot.spread}% / {bot.orderAmount} BTC</p>
             </div>
              <div>
                 <span className="text-brand-secondary">Inventory (USDT)</span>
-                <p className="text-white">{bot.inventory.usdt.toFixed(2)}</p>
+                <p className="text-brand-text-primary">{bot.inventory.usdt.toFixed(2)}</p>
             </div>
              <div>
                 <span className="text-brand-secondary">Inventory (BTC)</span>
-                <p className="text-white">{bot.inventory.btc.toFixed(6)}</p>
+                <p className="text-brand-text-primary">{bot.inventory.btc.toFixed(6)}</p>
             </div>
         </div>
         <button onClick={() => removeMarketMakerBot(bot.id)} className="text-brand-red text-[11px] hover:underline">
@@ -89,27 +89,27 @@ const MarketMakerBots: React.FC = () => {
   if (isCreating) {
     return (
       <div className="space-y-3">
-        <h3 className="text-white font-semibold text-base">Create New MM Bot</h3>
+        <h3 className="text-brand-text-primary font-semibold text-base">Create New MM Bot</h3>
         <div className="grid grid-cols-2 gap-3 text-sm">
            <div>
               <label className="text-xs text-brand-secondary mb-1 block">Lower Price Range (USDT)</label>
-              <input type="number" value={priceRangeLower} onChange={e => setPriceRangeLower(e.target.value)} placeholder={`${(marketData.price * 0.95).toFixed(0)}`} className="w-full bg-brand-bg border border-brand-border rounded px-2 py-1.5 text-white font-mono text-xs"/>
+              <input type="number" value={priceRangeLower} onChange={e => setPriceRangeLower(e.target.value)} placeholder={`${(marketData.price * 0.95).toFixed(0)}`} className="w-full bg-brand-bg border border-brand-border rounded px-2 py-1.5 text-brand-text-primary font-mono text-xs"/>
            </div>
            <div>
               <label className="text-xs text-brand-secondary mb-1 block">Upper Price Range (USDT)</label>
-              <input type="number" value={priceRangeUpper} onChange={e => setPriceRangeUpper(e.target.value)} placeholder={`${(marketData.price * 1.05).toFixed(0)}`} className="w-full bg-brand-bg border border-brand-border rounded px-2 py-1.5 text-white font-mono text-xs"/>
+              <input type="number" value={priceRangeUpper} onChange={e => setPriceRangeUpper(e.target.value)} placeholder={`${(marketData.price * 1.05).toFixed(0)}`} className="w-full bg-brand-bg border border-brand-border rounded px-2 py-1.5 text-brand-text-primary font-mono text-xs"/>
            </div>
             <div>
               <label className="text-xs text-brand-secondary mb-1 block">Spread (%)</label>
-              <input type="number" value={spread} step="0.1" onChange={e => setSpread(e.target.value)} className="w-full bg-brand-bg border border-brand-border rounded px-2 py-1.5 text-white font-mono text-xs"/>
+              <input type="number" value={spread} step="0.1" onChange={e => setSpread(e.target.value)} className="w-full bg-brand-bg border border-brand-border rounded px-2 py-1.5 text-brand-text-primary font-mono text-xs"/>
            </div>
            <div>
               <label className="text-xs text-brand-secondary mb-1 block">Order Amount (BTC)</label>
-              <input type="number" value={orderAmount} step="0.001" onChange={e => setOrderAmount(e.target.value)} className="w-full bg-brand-bg border border-brand-border rounded px-2 py-1.5 text-white font-mono text-xs"/>
+              <input type="number" value={orderAmount} step="0.001" onChange={e => setOrderAmount(e.target.value)} className="w-full bg-brand-bg border border-brand-border rounded px-2 py-1.5 text-brand-text-primary font-mono text-xs"/>
            </div>
            <div className="col-span-2">
                <label className="text-xs text-brand-secondary mb-1 block">Initial Capital (USDT)</label>
-               <input type="number" value={initialUsdt} onChange={e => setInitialUsdt(e.target.value)} placeholder={`Available: ${availableBalances.usdt.toFixed(2)}`} className="w-full bg-brand-bg border border-brand-border rounded px-2 py-1.5 text-white font-mono text-xs"/>
+               <input type="number" value={initialUsdt} onChange={e => setInitialUsdt(e.target.value)} placeholder={`Available: ${availableBalances.usdt.toFixed(2)}`} className="w-full bg-brand-bg border border-brand-border rounded px-2 py-1.5 text-brand-text-primary font-mono text-xs"/>
            </div>
         </div>
         <div className="flex gap-2">
@@ -123,7 +123,7 @@ const MarketMakerBots: React.FC = () => {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h3 className="text-white font-semibold text-base">Market Maker Bots</h3>
+        <h3 className="text-brand-text-primary font-semibold text-base">Market Maker Bots</h3>
         <button onClick={() => setIsCreating(true)} className="px-3 py-1 bg-brand-primary text-white rounded-md text-xs font-semibold">
             + New Bot
         </button>

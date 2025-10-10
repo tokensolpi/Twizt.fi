@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useTradeHistory } from '../contexts/TradeHistoryContext';
 import type { Balances, LendingMarketAsset } from '../types';
@@ -89,11 +88,11 @@ const LendBorrow: React.FC = () => {
                 const userAmount = isSupply ? (suppliedAssets[asset.asset] || 0) : (borrowedAssets[asset.asset] || 0);
                 return (
                     <div key={asset.asset} className="grid grid-cols-4 gap-2 items-center text-sm p-2 bg-brand-bg rounded-md">
-                        <span className="font-semibold text-white">{asset.name}</span>
+                        <span className="font-semibold text-brand-text-primary">{asset.name}</span>
                         <span className={`text-center font-mono ${isSupply ? 'text-green-400' : 'text-red-400'}`}>
                             {(isSupply ? asset.supplyApy : asset.borrowApy).toFixed(2)}%
                         </span>
-                        <span className="text-right font-mono text-white">{userAmount.toFixed(4)}</span>
+                        <span className="text-right font-mono text-brand-text-primary">{userAmount.toFixed(4)}</span>
                         <div className="flex justify-end gap-1">
                             <button onClick={() => { setSelectedAsset(asset); setAction(isSupply ? 'supply' : 'borrow')}} className="px-2 py-0.5 text-xs bg-brand-primary/20 text-brand-primary rounded-md">+</button>
                             {userAmount > 0 && <button onClick={() => { setSelectedAsset(asset); setAction(isSupply ? 'withdraw' : 'repay')}} className="px-2 py-0.5 text-xs bg-brand-secondary/20 text-brand-secondary rounded-md">-</button>}
@@ -113,10 +112,10 @@ const LendBorrow: React.FC = () => {
         
         return (
             <div className="space-y-4 animate-fade-in">
-                <h3 className="text-white font-semibold text-base capitalize">{action} {selectedAsset.name}</h3>
+                <h3 className="text-brand-text-primary font-semibold text-base capitalize">{action} {selectedAsset.name}</h3>
                 <div>
                     <label className="text-xs text-brand-secondary mb-1 block">Amount</label>
-                    <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.0" className="w-full bg-brand-bg border border-brand-border rounded-md px-3 py-2 text-white font-mono" />
+                    <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.0" className="w-full bg-brand-bg border border-brand-border rounded-md px-3 py-2 text-brand-text-primary font-mono" />
                     <button onClick={() => setAmount(maxAmount > 0 ? String(maxAmount) : '0')} className="text-xs text-brand-primary mt-1">Max: {maxAmount > 0 ? maxAmount.toFixed(4) : 0}</button>
                 </div>
                  <div className="flex gap-2">
@@ -132,11 +131,11 @@ const LendBorrow: React.FC = () => {
             <div className="p-3 bg-brand-bg rounded-lg border border-brand-border space-y-2">
                 <div className="flex justify-between items-center text-xs">
                     <span className="text-brand-secondary">Total Supply</span>
-                    <span className="text-white font-mono">${totalSuppliedValue.toFixed(2)}</span>
+                    <span className="text-brand-text-primary font-mono">${totalSuppliedValue.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
                     <span className="text-brand-secondary">Total Borrow</span>
-                    <span className="text-white font-mono">${totalBorrowedValue.toFixed(2)}</span>
+                    <span className="text-brand-text-primary font-mono">${totalBorrowedValue.toFixed(2)}</span>
                 </div>
                 <div className="mt-2">
                     <div className="flex justify-between items-center text-xs mb-1">
@@ -153,8 +152,8 @@ const LendBorrow: React.FC = () => {
             </div>
 
             <div className="flex justify-center border-b border-brand-border">
-                <button onClick={() => setActiveTab('supply')} className={`w-1/2 py-2 text-sm font-semibold transition-colors ${activeTab === 'supply' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-brand-secondary hover:text-white'}`}>Supply Markets</button>
-                <button onClick={() => setActiveTab('borrow')} className={`w-1/2 py-2 text-sm font-semibold transition-colors ${activeTab === 'borrow' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-brand-secondary hover:text-white'}`}>Borrow Markets</button>
+                <button onClick={() => setActiveTab('supply')} className={`w-1/2 py-2 text-sm font-semibold transition-colors ${activeTab === 'supply' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-brand-secondary hover:text-brand-text-primary'}`}>Supply Markets</button>
+                <button onClick={() => setActiveTab('borrow')} className={`w-1/2 py-2 text-sm font-semibold transition-colors ${activeTab === 'borrow' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-brand-secondary hover:text-brand-text-primary'}`}>Borrow Markets</button>
             </div>
             {activeTab === 'supply' ? renderMarketTable(true) : renderMarketTable(false)}
         </div>

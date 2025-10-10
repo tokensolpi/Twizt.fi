@@ -5,6 +5,7 @@ import { MarketDataProvider } from './contexts/MarketDataContext';
 import { TradeHistoryProvider } from './contexts/TradeHistoryContext';
 import { WalletProvider } from './contexts/WalletContext';
 import { GasPriceProvider } from './contexts/GasPriceContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -14,14 +15,16 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <WalletProvider>
-      <GasPriceProvider>
-        <MarketDataProvider>
-          <TradeHistoryProvider>
-            <App />
-          </TradeHistoryProvider>
-        </MarketDataProvider>
-      </GasPriceProvider>
-    </WalletProvider>
+    <ThemeProvider>
+      <WalletProvider>
+        <GasPriceProvider>
+          <MarketDataProvider>
+            <TradeHistoryProvider>
+              <App />
+            </TradeHistoryProvider>
+          </MarketDataProvider>
+        </GasPriceProvider>
+      </WalletProvider>
+    </ThemeProvider>
   </React.StrictMode>
 );

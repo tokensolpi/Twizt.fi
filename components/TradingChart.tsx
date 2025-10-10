@@ -1,10 +1,11 @@
-
 import React, { useEffect, useRef, memo } from 'react';
 import { useMarketData } from '../contexts/MarketDataContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 const TradingChartComponent: React.FC = () => {
   const container = useRef<HTMLDivElement>(null);
   const { currentPair } = useMarketData();
+  const { theme } = useTheme();
 
   useEffect(() => {
     if (!container.current) {
@@ -25,7 +26,7 @@ const TradingChartComponent: React.FC = () => {
       "symbol": symbol,
       "interval": "60",
       "timezone": "Etc/UTC",
-      "theme": "dark",
+      "theme": theme,
       "style": "1",
       "locale": "en",
       "enable_publishing": false,
@@ -39,13 +40,13 @@ const TradingChartComponent: React.FC = () => {
         "Volume@tv-basicstudies",
         "BB@tv-basicstudies" // Added Volume and Bollinger Bands
       ],
-      "backgroundColor": "#161B22",
-      "gridColor": "#30363D"
+      "backgroundColor": "rgba(var(--brand-surface))",
+      "gridColor": "rgba(var(--brand-border))"
     });
 
     container.current.appendChild(script);
 
-  }, [currentPair]); // Re-run the effect when currentPair changes
+  }, [currentPair, theme]); // Re-run the effect when currentPair or theme changes
 
   return (
     <div className="bg-brand-surface border border-brand-border rounded-lg p-0 overflow-hidden h-[500px]">

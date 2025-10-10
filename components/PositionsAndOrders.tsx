@@ -1,11 +1,8 @@
-
-
-
-
 import React, { useState } from 'react';
 import { useTradeHistory } from '../contexts/TradeHistoryContext';
 import { Order, OrderStatus, OrderType, FuturesPosition } from '../types';
 import { CryptoIcon } from './icons/CryptoIcon';
+import { ARBITRUM_BLOCK_EXPLORER } from '../constants';
 
 const PositionsAndOrders: React.FC = () => {
   const { balances, openOrders, orderHistory, futuresPositions, cancelOrder, closeFuturesPosition } = useTradeHistory();
@@ -26,17 +23,26 @@ const PositionsAndOrders: React.FC = () => {
 
   const OrderRow: React.FC<{ order: Order, isHistory?: boolean }> = ({ order, isHistory = false }) => (
     <tr className="border-b border-brand-border last:border-b-0 hover:bg-brand-border/20">
-      <td className="p-2 text-white">{order.pair}</td>
+      <td className="p-2 text-brand-text-primary">{order.pair}</td>
       <td className={`p-2 ${order.type === OrderType.BUY ? 'text-green-400' : 'text-red-400'}`}>{order.type}</td>
-      <td className="p-2 text-white">{order.price.toFixed(2)}</td>
-      <td className="p-2 text-white">{order.amount.toFixed(4)}</td>
-      <td className={`p-2 ${order.status === OrderStatus.LIQUIDATED ? 'text-red-500 font-semibold' : 'text-brand-secondary'}`}>
-        {isHistory ? order.status : order.createdAt}
+      <td className="p-2 text-brand-text-primary">{order.price.toFixed(2)}</td>
+      <td className="p-2 text-brand-text-primary">{order.amount.toFixed(4)}</td>
+      <td className={`p-2`}>
+         <span className={`${
+           order.status === OrderStatus.LIQUIDATED ? 'text-red-500 font-semibold' : 
+           order.status === OrderStatus.PENDING ? 'text-yellow-500 animate-pulse' : 'text-brand-secondary'
+         }`}>
+           {isHistory ? order.status : order.status === OrderStatus.OPEN ? order.createdAt : order.status}
+         </span>
       </td>
-      <td className="p-2 text-right">
-        {!isHistory && order.status === OrderStatus.OPEN && (
-          <button onClick={() => cancelOrder(order.id)} className="text-brand-red hover:underline text-xs">Cancel</button>
-        )}
+      <td className="p-2 text-right text-xs">
+        {order.txHash ? (
+          <a href={`${ARBITRUM_BLOCK_EXPLORER}/tx/${order.txHash}`} target="_blank" rel="noopener noreferrer" className="text-brand-primary hover:underline">
+            View Tx
+          </a>
+        ) : !isHistory && order.status === OrderStatus.OPEN ? (
+          <button onClick={() => cancelOrder(order.id)} className="text-brand-red hover:underline">Cancel</button>
+        ) : null}
       </td>
     </tr>
   );
@@ -49,7 +55,7 @@ const PositionsAndOrders: React.FC = () => {
       <div className="bg-brand-bg p-3 border border-brand-border rounded-lg text-xs font-mono">
         <div className="flex justify-between items-start mb-3">
           <div>
-            <span className="text-white font-semibold text-sm">{position.pair}</span>
+            <span className="text-brand-text-primary font-semibold text-sm">{position.pair}</span>
             <p className={`font-semibold text-base ${position.side === 'LONG' ? 'text-green-400' : 'text-red-400'}`}>
               {position.side} {position.leverage}x
             </p>
@@ -68,15 +74,15 @@ const PositionsAndOrders: React.FC = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-[11px]">
           <div>
             <span className="text-brand-secondary block">Size</span>
-            <p className="text-white">{position.size.toFixed(4)} {position.pair.split('/')[0]}</p>
+            <p className="text-brand-text-primary">{position.size.toFixed(4)} {position.pair.split('/')[0]}</p>
           </div>
           <div>
             <span className="text-brand-secondary block">Entry Price</span>
-            <p className="text-white">{position.entryPrice.toFixed(2)}</p>
+            <p className="text-brand-text-primary">{position.entryPrice.toFixed(2)}</p>
           </div>
           <div>
             <span className="text-brand-secondary block">Margin</span>
-            <p className="text-white">{position.margin.toFixed(2)} USDT</p>
+            <p className="text-brand-text-primary">{position.margin.toFixed(2)} USDT</p>
           </div>
           <div>
             <span className="text-brand-secondary block">Liq. Price</span>
@@ -101,11 +107,11 @@ const PositionsAndOrders: React.FC = () => {
       <div className="flex items-center gap-3">
         <CryptoIcon asset={asset.toLowerCase()} />
         <div>
-          <p className="font-mono text-white font-medium">{asset}</p>
+          <p className="font-mono text-brand-text-primary font-medium">{asset}</p>
           <p className="text-xs text-brand-secondary">{name}</p>
         </div>
       </div>
-      <p className="font-mono text-white">{balance.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</p>
+      <p className="font-mono text-brand-text-primary">{balance.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</p>
     </div>
   );
   
@@ -114,8 +120,7 @@ const PositionsAndOrders: React.FC = () => {
     btc: "Bitcoin",
     eth: "Ethereum",
     sol: "Solana",
-    bnb: "BNB",
-    doge: "Dogecoin",
+    link: "Chainlink",
     gdp: "LP Token"
   };
 
@@ -160,7 +165,7 @@ const PositionsAndOrders: React.FC = () => {
                           <th className="p-2 font-semibold text-brand-secondary">Side</th>
                           <th className="p-2 font-semibold text-brand-secondary">Price</th>
                           <th className="p-2 font-semibold text-brand-secondary">Amount</th>
-                          <th className="p-2 font-semibold text-brand-secondary">{activeTab === 'open' ? 'Time' : 'Status'}</th>
+                          <th className="p-2 font-semibold text-brand-secondary">{activeTab === 'open' ? 'Status' : 'Status'}</th>
                           <th className="p-2 font-semibold text-brand-secondary text-right">Action</th>
                       </tr>
                   </thead>

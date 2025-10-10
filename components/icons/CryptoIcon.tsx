@@ -40,6 +40,16 @@ export const CryptoIcon: React.FC<CryptoIconProps> = ({ asset }) => {
           <path d="M4 18h16M4 12h16M4 6h16" />
         </svg>
       );
+    case 'link':
+      return (
+         <svg {...iconProps} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500">
+          <path d="M9 8V7a3 3 0 013-3v0a3 3 0 013 3v1" />
+          <path d="M12 8h.01" />
+          <path d="M8 12.5a2.5 2.5 0 105 0 2.5 2.5 0 00-5 0z" />
+          <path d="M12 15v4" />
+          <path d="M16 17a2 2 0 01-2 2H8a2 2 0 01-2-2" />
+         </svg>
+      );
     case 'bnb':
         return (
             <svg {...iconProps} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-400">

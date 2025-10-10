@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { getMarketAnalysis, getPricePrediction } from '../services/geminiService';
 import { useMarketData } from '../contexts/MarketDataContext';
@@ -68,7 +67,7 @@ const AIAnalysis: React.FC = () => {
           <div className="flex justify-between items-start">
             <div>
               <p className="text-xs text-brand-secondary">Predicted Price ({activeTimeframe})</p>
-              <p className="text-xl font-mono text-white">{result.predictedPrice.toFixed(priceDecimalPlaces)} USDT</p>
+              <p className="text-xl font-mono text-brand-text-primary">{result.predictedPrice.toFixed(priceDecimalPlaces)} USDT</p>
               <p className={`text-sm flex items-center font-semibold ${isPositive ? 'text-brand-green' : 'text-brand-red'}`}>
                 {isPositive ? <ArrowUpIcon /> : <ArrowDownIcon />} 
                 {isPositive ? '+' : ''}{priceChange.toFixed(priceDecimalPlaces)} ({isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%)
@@ -76,12 +75,12 @@ const AIAnalysis: React.FC = () => {
             </div>
             <div className="text-right">
                 <p className="text-xs text-brand-secondary">Confidence</p>
-                <p className="text-sm font-semibold text-white">{result.confidence}</p>
+                <p className="text-sm font-semibold text-brand-text-primary">{result.confidence}</p>
             </div>
           </div>
           <div className="mt-3 border-t border-brand-border pt-3">
             <p className="text-xs text-brand-secondary">Analysis:</p>
-            <p className="text-white whitespace-pre-wrap text-sm">{result.analysis}</p>
+            <p className="text-brand-text-primary whitespace-pre-wrap text-sm">{result.analysis}</p>
           </div>
        </div>
     );
@@ -90,7 +89,7 @@ const AIAnalysis: React.FC = () => {
   return (
     <>
       <div>
-        <h3 className="text-white font-semibold mb-2 text-base">AI Market Analysis</h3>
+        <h3 className="text-brand-text-primary font-semibold mb-2 text-base">AI Market Analysis</h3>
         <p className="text-sm text-brand-secondary mb-4">
           Ask Gemini about market trends, sentiment, or technical indicators for {currentPair}.
         </p>
@@ -101,7 +100,7 @@ const AIAnalysis: React.FC = () => {
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAnalysis()}
             placeholder="e.g., What's the short-term outlook?"
-            className="flex-grow bg-brand-bg border border-brand-border rounded-md px-3 py-2 text-white placeholder-brand-secondary text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
+            className="flex-grow bg-brand-bg border border-brand-border rounded-md px-3 py-2 text-brand-text-primary placeholder-brand-secondary text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
             disabled={isLoading}
           />
           <button
@@ -117,7 +116,7 @@ const AIAnalysis: React.FC = () => {
         
         {analysis && (
           <div className="mt-4 p-4 bg-brand-bg rounded-md border border-brand-border">
-            <p className="text-white whitespace-pre-wrap text-sm">{analysis}</p>
+            <p className="text-brand-text-primary whitespace-pre-wrap text-sm">{analysis}</p>
           </div>
         )}
       </div>
@@ -125,7 +124,7 @@ const AIAnalysis: React.FC = () => {
       <div className="border-t border-brand-border my-6"></div>
 
       <div>
-        <h3 className="text-white font-semibold mb-2 text-base">AI Price Prediction ({currentPair})</h3>
+        <h3 className="text-brand-text-primary font-semibold mb-2 text-base">AI Price Prediction ({currentPair})</h3>
         <p className="text-sm text-brand-secondary mb-4">
           Select a timeframe to get a short-term price forecast from Gemini.
         </p>
@@ -135,7 +134,7 @@ const AIAnalysis: React.FC = () => {
               key={tf}
               onClick={() => handlePrediction(tf)}
               disabled={isPredicting}
-              className={`flex-1 px-3 py-2 text-sm font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`flex-1 px-3 py-2 text-sm font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-brand-text-secondary hover:text-brand-text-primary ${
                 activeTimeframe === tf && !isPredicting
                   ? 'bg-brand-primary text-white'
                   : 'bg-brand-bg border border-brand-border hover:bg-brand-border'
